@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Ship native arm64 builds of the launcher AppImage and the Nexus backend next to x86_64, with architecture-aware updates, downloads and installer. The game runtime remains x86_64.
+- Stop asking for an administrator password at sign-in on devices without an SMBIOS table (ARM handhelds): the backend probes the table only when it exists.
 - Preserve Microsoft broker headers on both hosted sign-in steps. Thanks @Wyze3306 for the upstream fix adapted here.
 - Accept compact JWE tickets when requesting game content licenses without changing Xbox or Store sign-in token handling.
 - Show owned games with unsupported packages in My Library with the existing Unsupported badge and installation disabled.
