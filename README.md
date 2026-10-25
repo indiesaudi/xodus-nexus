@@ -2,19 +2,28 @@
 
 <img src="assets/icon.png" width="96" alt="Xodus Nexus" />
 
-# Xodus Nexus
+# Xodus Nexus for AYN Odin 3
 
-Your Microsoft Store PC games, on Linux.
+Your Microsoft Store PC games on the AYN Odin 3, online and offline.
 
-[![CI](https://github.com/domsvoboda/xodus-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/domsvoboda/xodus-nexus/actions/workflows/ci.yml)
+[![CI](https://github.com/indiesaudi/xodus-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/indiesaudi/xodus-nexus/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
 
+> [!IMPORTANT]
+> **This is a fork of [Xodus Nexus](https://github.com/domsvoboda/xodus-nexus) for the AYN Odin 3 and other arm64 Linux handhelds.** It adds:
+>
+> - **Offline play**: games start without a connection on the device your Microsoft account designates for offline play, like the Xbox app.
+> - **Fast offline launches**: the launcher notices that Microsoft is unreachable before you press Play and starts in seconds instead of minutes.
+> - **Native arm64**: launcher, backend and runtime built for arm64, tested on an Odin 3 running ArmadaOS. x86_64 PCs are still supported.
+>
+> These changes are proposed upstream but not merged yet. This fork publishes its own releases, and installing from here also updates from here. For the official builds, use [domsvoboda/xodus-nexus](https://github.com/domsvoboda/xodus-nexus).
+
 > [!CAUTION]
 > **Xodus Nexus is an independent, unofficial project built on Xodus. It is not an official project or release from the upstream Xodus developers.**
 >
-> Please report all issues encountered with **Xodus Nexus** only in the [Xodus Nexus repository](https://github.com/domsvoboda/xodus-nexus/issues), not in the upstream Xodus issue tracker or support channels.
+> Please report issues with this fork in [its own issue tracker](https://github.com/indiesaudi/xodus-nexus/issues), not in the Xodus Nexus or upstream Xodus trackers.
 >
 > Nexus includes its own changes, so a problem in Nexus does not necessarily indicate a problem in upstream Xodus.
 
@@ -28,9 +37,31 @@ for supported games.
 
 *Preview with sample account data.*
 
-## Install
+## Install on the AYN Odin 3
 
-> **Preview fork.** This fork publishes its own launcher, backend and runtime with offline play, faster offline launches and native arm64 support, which are proposed upstream but not merged yet. Installing from here also updates from here. For the official builds, use [domsvoboda/xodus-nexus](https://github.com/domsvoboda/xodus-nexus).
+Tested on the Odin 3 with ArmadaOS. Do the first setup in **Desktop Mode**.
+
+1. Open a terminal (Konsole) and run:
+
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/indiesaudi/xodus-nexus/main/scripts/install.sh | bash
+   ```
+
+   The installer picks the arm64 build. On ArmadaOS the system-package step only prints a warning, because the system is read-only; the AppImage brings what it needs.
+2. Start **Xodus Nexus** from the application menu.
+3. In **Settings**, click **Install backend**, then **Install Nexus runtime**. Both download the arm64 builds from this fork.
+4. Sign in with your Microsoft account. If the wallet asks to be set up, see [Wallet setup and unlocking](#wallet-setup-and-unlocking).
+5. Install your games from **Store** or **My Library**, then choose **Add Nexus to Steam** in Settings to start Nexus from Game Mode.
+
+### Set up offline play
+
+1. In **Settings → Offline permissions**, make this Odin 3 your account's offline device. Microsoft allows one offline device per account and three changes a year.
+2. Start each game once while online. Nexus keeps its offline license for up to 30 days, renewed on every online start.
+3. Without a connection, Nexus shows **Offline** in the header and starts those games with the stored license and your saved Xbox identity. Online features are unavailable, and saves stay on the device for that session.
+
+Sign out removes the stored licenses and the saved identity.
+
+## Install on other Linux PCs
 
 Download the latest Linux AppImage for your CPU (`x86_64` or `arm64`) from [Releases](https://github.com/indiesaudi/xodus-nexus/releases), make it executable and open it. On arm64 the launcher, the Nexus backend and the Nexus runtime are native arm64 builds; the launcher picks the matching backend and runtime for your CPU.
 
@@ -75,7 +106,7 @@ Flatpak version available through Discover. Other browsers are not supported.
 - If setup or the password dialog does not work in Game Mode, try it in Desktop Mode first. If the problem persists, include the backend diagnostic log in your issue report.
 
 [Documentation](https://github.com/domsvoboda/xodus-nexus/wiki) ·
-[Report an issue](https://github.com/domsvoboda/xodus-nexus/issues)
+[Report an issue](https://github.com/indiesaudi/xodus-nexus/issues)
 
 ## How it works
 
