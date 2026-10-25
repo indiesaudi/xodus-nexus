@@ -4,6 +4,8 @@ import path from 'node:path';
 
 export const CLOSE_WAIT_MS = 30_000;
 export const STOP_WAIT_MS = 8_000;
+/** Games ignore WM_CLOSE while they boot (REPLACED for its first ~30 s), so the request repeats. */
+export const CLOSE_RETRY_MS = 3_000;
 
 /** The process verbs a graceful close needs; `GameProcess` and an adopted game both provide them. */
 export interface Closable {
@@ -19,6 +21,7 @@ export interface GracefulOptions {
   log(line: string): void;
   closeWaitMs?: number;
   stopWaitMs?: number;
+  closeRetryMs?: number;
   run?: (file: string, args: string[], env: NodeJS.ProcessEnv) => Promise<number | null>;
 }
 
@@ -73,11 +76,21 @@ function settled(promise: Promise<unknown>, ms: number): Promise<boolean> {
 export async function closeGracefully(game: Closable, launchId: string, options: GracefulOptions): Promise<'closed' | 'stopped' | 'forced'> {
   const run = options.run ?? defaultRun;
   if (options.helper) {
-    const code = await run(options.helper, ['--launch-id', launchId, '--timeout-ms', '5000'], options.env);
+    const args = ['--launch-id', launchId, '--timeout-ms', '5000'];
+    const code = await run(options.helper, args, options.env);
     if (code === 0) {
       options.log('Asked the game window to close; waiting for the runtime to finish.');
-      if (await settled(game.result, options.closeWaitMs ?? CLOSE_WAIT_MS)) return 'closed';
-      options.log('The game did not close in time; interrupting it.');
+      const deadline = Date.now() + (options.closeWaitMs ?? CLOSE_WAIT_MS);
+      const retry = options.closeRetryMs ?? CLOSE_RETRY_MS;
+      let asked = 1;
+      while (!await settled(game.result, Math.max(0, Math.min(retry, deadline - Date.now())))) {
+        if (Date.now() >= deadline) break;
+        if (asked++ === 1) options.log(`The game has not closed yet; asking again every ${Math.round(retry / 1000)} s.`);
+        // Exit 1 (no window left) just means it is already on its way out.
+        await run(options.helper, args, options.env);
+      }
+      if (await settled(game.result, 0)) return 'closed';
+      options.log(`The game did not close in time after ${asked} requests; interrupting it.`);
     } else options.log(code === 1 ? 'No game window to close yet; interrupting the launch.' : `The close helper failed (exit ${code ?? 'unknown'}); interrupting the game.`);
   } else options.log('No close helper in this build; interrupting the game.');
   await game.stop().catch(error => options.log(`Interrupt failed: ${(error as Error).message}`));

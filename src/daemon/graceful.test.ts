@@ -24,6 +24,17 @@ describe('closeGracefully', () => {
     expect(target.forces).toBe(0);
   });
 
+  it('repeats the close request while the game ignores it, as a booting game does', async () => {
+    const booting = game({});
+    let requests = 0;
+    const run = vi.fn(async () => { if (++requests === 3) setTimeout(booting.finish, 5); return 0; });
+    const log: string[] = [];
+    expect(await closeGracefully(booting, 'game-1', { helper: '/h', env: {}, log: line => log.push(line), run, closeWaitMs: 1_000, closeRetryMs: 20 })).toBe('closed');
+    expect(requests).toBe(3);
+    expect(booting.stops).toBe(0);
+    expect(log.filter(line => line.includes('asking again'))).toHaveLength(1);
+  });
+
   it('falls back to the interrupt when the window ignores the request, then to force', async () => {
     const ignoring = game({ stop: 10 });
     const run = vi.fn(async () => 0);
