@@ -2,9 +2,9 @@
 
 <img src="assets/icon.png" width="96" alt="Xodus Nexus" />
 
-# Xodus Nexus for AYN Odin 3
+# Xodus Nexus for AYN Odin 3 and other ArmadaOS supported devices
 
-Your Microsoft Store PC games on the AYN Odin 3, online and offline.
+Your Microsoft Store PC games on the AYN Odin 3 and other ArmadaOS supported devices, online and offline.
 
 [![CI](https://github.com/indiesaudi/xodus-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/indiesaudi/xodus-nexus/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
