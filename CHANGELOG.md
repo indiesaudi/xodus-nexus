@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Ship native arm64 builds of the launcher AppImage and the Nexus backend next to x86_64, with architecture-aware updates, downloads and installer. The game runtime remains x86_64.
-- Groundwork for an arm64 game runtime: pin a CachyOS arm64 Proton base, build the Nexus overlay DLLs as ARM64X hybrids in an experimental workflow, and teach the launcher the arm64 Proton layout (`bin-arm64`, `default_pfx_arm64`, `aarch64-windows`) and architecture-specific runtime archives. No arm64 runtime is published yet.
+- Experimental arm64 game runtime pipeline: pin a CachyOS arm64 Proton base, build the Nexus overlay DLLs as ARM64X hybrids and DXVK as ARM64EC from the same pinned sources, build the host shim and FFmpeg libraries for aarch64, assemble them with the layout-aware assembly script and package an `-aarch64.tar.xz` runtime candidate in CI. The launcher understands the arm64 Proton layout (`bin-arm64`, `default_pfx_arm64`, `aarch64-windows`) and picks runtime archives for its architecture. No arm64 runtime is published yet.
 - Stop asking for an administrator password at sign-in on devices without an SMBIOS table (ARM handhelds): the backend probes the table only when it exists.
 - Preserve Microsoft broker headers on both hosted sign-in steps. Thanks @Wyze3306 for the upstream fix adapted here.
 - Accept compact JWE tickets when requesting game content licenses without changing Xbox or Store sign-in token handling.
