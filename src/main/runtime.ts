@@ -13,7 +13,7 @@ const REPOSITORY = 'xodus-gaming/Proton';
 const ARCH_SUFFIX = RUNTIME_ARCH_SUFFIX[currentArch()];
 const BRANCH = 'xodus/bleeding-edge';
 const REPOSITORY_URL = 'https://github.com/xodus-gaming/Proton.git';
-const NEXUS_REPOSITORY = 'domsvoboda/xodus-nexus';
+const NEXUS_REPOSITORY = 'indiesaudi/xodus-nexus';
 
 interface RuntimePointer {
   name: string;

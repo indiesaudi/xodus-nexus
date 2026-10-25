@@ -30,12 +30,14 @@ for supported games.
 
 ## Install
 
-Download the latest Linux AppImage for your CPU (`x86_64` or `arm64`) from [Releases](https://github.com/domsvoboda/xodus-nexus/releases), make it executable and open it. On arm64 the launcher and the Nexus backend run natively; the game runtime is still x86_64 and needs an FEX-enabled distribution such as ArmadaOS until a native runtime exists.
+> **Preview fork.** This fork publishes its own launcher, backend and runtime with offline play, faster offline launches and native arm64 support, which are proposed upstream but not merged yet. Installing from here also updates from here. For the official builds, use [domsvoboda/xodus-nexus](https://github.com/domsvoboda/xodus-nexus).
+
+Download the latest Linux AppImage for your CPU (`x86_64` or `arm64`) from [Releases](https://github.com/indiesaudi/xodus-nexus/releases), make it executable and open it. On arm64 the launcher, the Nexus backend and the Nexus runtime are native arm64 builds; the launcher picks the matching backend and runtime for your CPU.
 
 For an application-menu installation on supported distributions:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/domsvoboda/xodus-nexus/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/indiesaudi/xodus-nexus/main/scripts/install.sh | bash
 ```
 
 In **Settings**, install the **Nexus backend** and **Nexus runtime**, then sign in

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { BACKEND_ARCH_SUFFIX, currentArch, type NexusArch } from './arch.js';
 
-export const BACKEND_REPOSITORY = 'domsvoboda/xodus-nexus';
+export const BACKEND_REPOSITORY = 'indiesaudi/xodus-nexus';
 export const backendAssets = fileURLToPath(new URL('../../assets/', import.meta.url));
 const lockBytes = readFileSync(new URL('../../assets/backend-source.lock.json', import.meta.url));
 export const backendLock = JSON.parse(lockBytes.toString()) as {
