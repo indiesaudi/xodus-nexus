@@ -2,6 +2,7 @@ import { constants, promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { commandWords } from '../shared/launch-tools.js';
+import { selectCompatTool } from './steam-tool.js';
 
 interface Field { type: number; key: string; value: string | number | Field[]; start: number; end: number }
 const missing = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT';
@@ -199,7 +200,7 @@ export async function writeSteamArtwork(config: string, appid: number, artwork: 
   }
 }
 export async function addSteamShortcut(config: string, launch: SteamLaunch, artwork: { cover?: Buffer; wide?: Buffer },
-  running = steamRunning): Promise<string> {
+  running = steamRunning, compatTool?: string): Promise<string> {
   const stopped = async () => { if (await running()) throw Error('Close Steam completely, then try Add to Steam again. Nexus will not close Steam for you.'); };
   await stopped(); await safeDirectory(config);
   const lockPath = path.join(config, '.xodus-nexus-shortcuts.lock');
@@ -220,6 +221,12 @@ export async function addSteamShortcut(config: string, launch: SteamLaunch, artw
       await stopped();
       if (original) await fs.rename(temp, file);
       else await fs.link(temp, file);
+    }
+    // The shortcut's Compatibility choice, unless the player already made one.
+    if (compatTool) {
+      await stopped();
+      await selectCompatTool(path.resolve(config, '..', '..', '..'), planned.appid, compatTool)
+        .catch(error => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; });
     }
     return `steam://rungameid/${(BigInt(planned.appid) << 32n) | 0x02000000n}`;
   } finally {

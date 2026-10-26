@@ -5,7 +5,7 @@
   "commit": "53ea781dcd073e31d7ea68e894134e9c959bff04",
   "rust": "1.99.0",
   "cargoLockSha256": "2259b343e00dadc263018beb7664b12e9d58a0b73bff502ad566f5f8619ce28a",
-  "patchId": "linux-run-v47",
+  "patchId": "linux-run-v48",
   "compatibility": "linux-run-v22",
   "patches": [
     {
@@ -195,6 +195,10 @@
     {
       "file": "xodus-full-view.patch",
       "sha256": "e539392a909a7f0efb37202c30eeea3895ad70bd5b0372595f5ac8e72419c47d"
+    },
+    {
+      "file": "xodus-playfab-view-adapter.patch",
+      "sha256": "c99262c38ec9c1c7cbb0ed1e0e53406c254c014c73769bb5876ed15b87641e18"
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { run } from './process.js';
 import { detectProtonLayout, locateProtonWine, type ProtonLayout } from './proton-layout.js';
@@ -213,6 +214,19 @@ export interface SteamOverlay {
   layout: ProtonLayout;
   /** Environment for the game: native overrides for the overlay DLLs. */
   environment: Record<string, string>;
+  /** The runtime's x64 PlayFab Game Saves adapter, when its checksum matches the runtime metadata. */
+  playfabAdapter(): Promise<string | undefined>;
+}
+
+/** The runtime's PlayFab adapter (x64, like the SDK it replaces), checked against its metadata. */
+export async function checkedPlayfabAdapter(runtimeRoot: string): Promise<string | undefined> {
+  try {
+    const metadata = JSON.parse(await fs.readFile(path.join(runtimeRoot, 'XODUS_NEXUS_PATCH.json'), 'utf8')) as { runtimeCompatibility?: Record<string, string> };
+    const expected = metadata.runtimeCompatibility?.['PlayFabGameSave.dll'];
+    const file = path.join(runtimeRoot, 'files', 'share', 'xodus-nexus', 'compat', 'PlayFabGameSave.dll');
+    if (!expected || createHash('sha256').update(await fs.readFile(file)).digest('hex') !== expected) return undefined;
+    return file;
+  } catch { return undefined; }
 }
 
 /**
@@ -248,7 +262,7 @@ export async function prepareSteamOverlay(command: SteamProtonCommand, nexusProt
   await installRuntimeComponents(prefix, components.map(({ name, bytes }) => ({ name, bytes: withoutBuiltinMarker(bytes) })));
   onLine(`Applied the Nexus runtime overlay (${layout.peArch}) to the Steam prefix ${prefix}.`);
   const overrides = [env.WINEDLLOVERRIDES, overlayOverrides(names)].filter(Boolean).join(';');
-  return { layout, environment: { WINEDLLOVERRIDES: overrides } };
+  return { layout, environment: { WINEDLLOVERRIDES: overrides }, playfabAdapter: () => checkedPlayfabAdapter(runtime.root) };
 }
 
 /**

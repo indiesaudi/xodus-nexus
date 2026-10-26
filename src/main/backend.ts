@@ -73,6 +73,7 @@ export class BackendManager {
         capabilities.licenseCache = launch.code === 0 && /(?:^|\s)--license-cache(?:\s|$)/m.test(launch.output);
         capabilities.offlineLaunch = Boolean(capabilities.licenseCache && /(?:^|\s)--offline(?:\s|$)/m.test(launch.output));
         capabilities.fullView = launch.code === 0 && /(?:^|\s)--materialize-all(?:\s|$)/m.test(launch.output) && /(?:^|\s)--view-dir(?:\s|$)/m.test(launch.output);
+        capabilities.playfabAdapter = Boolean(capabilities.fullView && /(?:^|\s)--playfab-adapter(?:\s|$)/m.test(launch.output));
       }
       return capabilities.login && capabilities.streaming ? capabilities : null;
     } catch { return null; }
