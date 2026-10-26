@@ -1,0 +1,3 @@
+# Xodus Nexus backend 0.2.16
+
+- Add `run --materialize-all --view-dir <dir>`: writes every decrypted package file, not only the executables, into a temporary launch view inside an owner-only (0700) directory, so a game runs under any Wine or Proton without the runtime's file maps. There is no fallback next to the game or in `/tmp`. The decrypted memory files are not inherited by Wine, Proton or the game, and no PlayFab token is put in the environment of such a launch. The launcher uses it when Steam's compatibility tool runs a game. Without the flag nothing changes.

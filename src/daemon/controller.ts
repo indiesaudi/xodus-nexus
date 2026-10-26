@@ -22,7 +22,7 @@ export class DaemonError extends Error {
   constructor(readonly code: DaemonErrorCode, message: string) { super(message); this.name = 'DaemonError'; }
 }
 
-export interface LaunchRequest { gameId: string; env: Record<string, string>; cwd?: string }
+export interface LaunchRequest { gameId: string; env: Record<string, string>; cwd?: string; steamCommand?: string[] }
 
 export interface ControllerOptions {
   userData: string;
@@ -190,7 +190,7 @@ export class GameController {
       await this.checkWallet();
       await this.refreshAccount();
       this.inspected = undefined;
-      const active = await this.session.launch(request.gameId);
+      const active = await this.session.launch(request.gameId, { steamCommand: request.steamCommand });
       this.running = { kind: 'launched', active };
       this.inspected = this.captureInspection(active.gameId);
       await this.persist();

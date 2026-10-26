@@ -471,8 +471,6 @@ test('stored offline licenses renew in the background without identifiers in the
   const patch = await fs.readFile(`assets/${entry.file}`, 'utf8');
   assert.equal(createHash('sha256').update(patch).digest('hex'), entry.sha256);
   assert.ok(lock.patches.findIndex(p => p.file === entry.file) > lock.patches.findIndex(p => p.file === 'xodus-offline-launch.patch'));
-  assert.equal(lock.version, '0.2.15');
-  assert.equal(lock.patchId, 'linux-run-v46');
   const files = [...patch.matchAll(/^diff --git a\/(\S+) b\/\S+$/gm)].map(match => match[1]);
   assert.deepEqual(files.sort(), ['crates/xodus-cli/src/commands.rs', 'crates/xodus-cli/src/commands/license_refresh.rs', 'crates/xodus-cli/src/license.rs', 'crates/xodus-cli/src/license_cache.rs', 'crates/xodus-cli/src/license_cache_tests.rs', 'crates/xodus-cli/src/main.rs']);
   assert.match(patch, /^\+\s*LicenseRefresh \{$/m);
@@ -486,4 +484,29 @@ test('stored offline licenses renew in the background without identifiers in the
   assert.match(patch, /offline_license_entries_list_only_this_accounts_valid_licenses_with_their_market/);
   assert.doesNotMatch(patch, /^\+.*\.timeout\(/m);
   await fs.access('.github/release-notes/backend-0.2.15.md');
+});
+
+test('a full launch view runs on any Wine without file maps and only in a private directory', async () => {
+  const lock = JSON.parse(await fs.readFile('assets/backend-source.lock.json', 'utf8'));
+  const entry = lock.patches.find(p => p.file === 'xodus-full-view.patch');
+  assert.ok(entry);
+  const patch = await fs.readFile(`assets/${entry.file}`, 'utf8');
+  assert.equal(createHash('sha256').update(patch).digest('hex'), entry.sha256);
+  assert.equal(lock.patches.at(-1).file, entry.file);
+  assert.equal(lock.version, '0.2.16');
+  assert.equal(lock.patchId, 'linux-run-v47');
+  const files = [...patch.matchAll(/^diff --git a\/(\S+) b\/\S+$/gm)].map(match => match[1]);
+  assert.deepEqual(files.sort(), ['crates/xodus-cli/src/commands/run.rs', 'crates/xodus-cli/src/main.rs']);
+  assert.match(patch, /requires = "view_dir"/);
+  assert.match(patch, /#\[arg\(long = "view-dir"/);
+  // No fallback next to the game or in /tmp, and an owner-only view directory.
+  assert.match(patch, /None if all => \{\s*\n\+\s*return Err/);
+  assert.match(patch, /metadata\.mode\(\) & 0o077 != 0/);
+  // File maps, inherited memfds and the PlayFab token stay out of a full view.
+  assert.match(patch, /if materialize_all \{[\s\S]*?flags\.insert\(FdFlags::CLOEXEC\)/);
+  assert.match(patch, /^\+\s*\.env\("WINE_DLL_FILE_MAP", env_value\)/m);
+  assert.match(patch, /not passing a PlayFab token in the environment/);
+  assert.match(patch, /full_view_materializes_every_encrypted_file_in_the_private_view_directory/);
+  assert.match(patch, /full_view_requires_a_private_absolute_view_directory/);
+  await fs.access('.github/release-notes/backend-0.2.16.md');
 });

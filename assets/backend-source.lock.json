@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "version": "0.2.15",
+  "version": "0.2.16",
   "repository": "https://github.com/xodus-gaming/xodus.git",
   "commit": "53ea781dcd073e31d7ea68e894134e9c959bff04",
   "rust": "1.99.0",
   "cargoLockSha256": "2259b343e00dadc263018beb7664b12e9d58a0b73bff502ad566f5f8619ce28a",
-  "patchId": "linux-run-v46",
+  "patchId": "linux-run-v47",
   "compatibility": "linux-run-v22",
   "patches": [
     {
@@ -191,6 +191,10 @@
     {
       "file": "xodus-license-refresh.patch",
       "sha256": "d2e41c2c66108f11f11e222cf742b6aa376db3894f968f2467316caea772467a"
+    },
+    {
+      "file": "xodus-full-view.patch",
+      "sha256": "44feef2377ff19b73f1e64e24c9873015b400abfae15122c5d42b24d84080258"
     }
   ]
 }
