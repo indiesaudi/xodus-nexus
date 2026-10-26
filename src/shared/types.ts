@@ -21,6 +21,8 @@ export interface BackendCapabilities {
   offlinePc?: boolean;
   /** `run --offline`: skip Microsoft entirely and launch on the stored offline license. */
   offlineLaunch?: boolean;
+  /** `run --materialize-all --view-dir`: a full private launch view that needs no Wine file maps. */
+  fullView?: boolean;
   streamingControls?: boolean;
   streamingBandwidthLimit?: boolean;
   packageSelection?: boolean;

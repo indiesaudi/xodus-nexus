@@ -55,6 +55,10 @@ export function steamArgument(value: string): string {
   return '"' + value.replace(/["`$\\]/g, '\\$&') + '"';
 }
 export interface SteamLaunch { title: string; executable: string; options: string; directory: string; identity: string; icon: string }
+/** Game shortcuts end in Steam's `%command%`, so a compatibility tool chosen in Steam reaches Nexus. */
+export const STEAM_COMMAND = ' %command%';
+/** The launch options shortcuts had before `%command%`; still recognized and upgraded in place. */
+const legacyOptions = (options: string) => options.endsWith(STEAM_COMMAND) ? options.slice(0, -STEAM_COMMAND.length) : undefined;
 export function findSteamLaunch(bytes: Buffer, launch: SteamLaunch): number | undefined {
   return findSteamLaunches(bytes, launch)[0];
 }
@@ -67,7 +71,9 @@ export function findSteamLaunches(bytes: Buffer, launch: SteamLaunch): number[] 
   const matches = new Set<number>();
   for (const entry of parse(bytes)) {
     const fields = entry.value as Field[];
-    if (!sameWords(field(fields, 'Exe'), launch.executable) || !sameWords(field(fields, 'LaunchOptions'), launch.options)) continue;
+    const legacy = legacyOptions(launch.options);
+    if (!sameWords(field(fields, 'Exe'), launch.executable) ||
+      !(sameWords(field(fields, 'LaunchOptions'), launch.options) || (legacy !== undefined && sameWords(field(fields, 'LaunchOptions'), legacy)))) continue;
     const appid = field(fields, 'appid');
     if (typeof appid === 'number' && (appid & 0x80000000)) matches.add(appid);
   }
@@ -76,13 +82,19 @@ export function findSteamLaunches(bytes: Buffer, launch: SteamLaunch): number[] 
 export function planSteamShortcut(original: Buffer | undefined, launch: SteamLaunch): { bytes: Buffer; appid: number; added: boolean } {
   const bytes = original ?? empty, entries = parse(bytes);
   if ([launch.title, launch.executable, launch.options, launch.directory, launch.identity, launch.icon].some(value => /\0/.test(value) || value.length > 4096)) throw Error('Invalid Steam shortcut data.');
+  const legacy = legacyOptions(launch.options);
   for (const entry of entries) {
     const fields = entry.value as Field[];
-    if (field(fields, 'exe') === launch.executable && field(fields, 'LaunchOptions') === launch.options) {
-      const appid = field(fields, 'appid');
-      if (typeof appid !== 'number' || !(appid & 0x80000000)) throw Error('Invalid existing Steam shortcut ID.');
-      return { bytes, appid, added: false };
-    }
+    const options = fields.find(value => value.key.toLowerCase() === 'launchoptions');
+    if (field(fields, 'exe') !== launch.executable || !options || (options.value !== launch.options && (legacy === undefined || options.value !== legacy))) continue;
+    const appid = field(fields, 'appid');
+    if (typeof appid !== 'number' || !(appid & 0x80000000)) throw Error('Invalid existing Steam shortcut ID.');
+    if (options.value === launch.options) return { bytes, appid, added: false };
+    // Upgrade only this entry's launch options; its id, artwork and Steam
+    // settings (such as the chosen compatibility tool) stay as they are.
+    const updated = Buffer.concat([bytes.subarray(0, options.start), string(options.key, launch.options), bytes.subarray(options.end)]);
+    parse(updated);
+    return { bytes: updated, appid, added: true };
   }
   // Steam stores the ID explicitly. Include the profile/game identity so games
   // with the same title and shared /bin/sh executable cannot collide silently.

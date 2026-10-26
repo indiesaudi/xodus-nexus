@@ -60,8 +60,19 @@ async function connect(socketPath: string, profileId: string, runtimeDir: string
   return undefined;
 }
 
+/**
+ * Splits the shortcut's own arguments from Steam's `%command%`, which follows
+ * the game id: `--launch-game <id> <steam command…>`.
+ */
+export function splitSteamCommand(argv: string[]): { own: string[]; steamCommand?: string[] } {
+  const index = argv.indexOf('--launch-game');
+  if (index < 0 || argv.length <= index + 2) return { own: argv };
+  return { own: argv.slice(0, index + 2), steamCommand: argv.slice(index + 2) };
+}
+
 export async function main(argv = process.argv.slice(2), env = process.env): Promise<number> {
-  const request = shortcutArguments(argv);
+  const { own, steamCommand } = splitSteamCommand(argv);
+  const request = shortcutArguments(own);
   if (!request.gameId) throw new Error('A game shortcut ID is required.');
   const gameId = request.gameId;
   const userData = request.profile ?? path.join(env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config'), 'xodus-nexus');
@@ -70,13 +81,14 @@ export async function main(argv = process.argv.slice(2), env = process.env): Pro
   const connection = runtimeDir && path.isAbsolute(runtimeDir) ? await connect(daemonSocketPath(runtimeDir, profileId), profileId, runtimeDir) : undefined;
   if (!connection) {
     say('Background service not running; starting Nexus directly.');
+    if (steamCommand?.some(word => path.basename(word) === 'proton')) say("Steam's compatibility tool needs the background service; this launch uses the Nexus runtime.");
     return legacyFallback(request.profile, gameId, env);
   }
   connection.send({ schema: 1, type: 'hello', client: 'steam', version: '1' });
   const hello = await connection.next((frame): frame is DaemonFrame & { type: 'hello' } => frame.type === 'hello', 5_000);
   say(`Connected to Nexus background service ${hello.daemonVersion}.`);
   const requestId = randomUUID();
-  connection.send({ schema: 1, type: 'launch', requestId, gameId, env: filterClientEnvironment(env), cwd: process.cwd(), attach: true });
+  connection.send({ schema: 1, type: 'launch', requestId, gameId, env: filterClientEnvironment(env), cwd: process.cwd(), attach: true, ...(steamCommand ? { steamCommand } : {}) });
   return new Promise<number>((resolve, reject) => {
     let operationId: string | undefined;
     let exited = false;

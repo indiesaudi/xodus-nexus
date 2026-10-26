@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { profileIdOf } from '../shared/profile-id.js';
 import type { Game } from '../shared/types.js';
-import { steamArgument, type SteamLaunch } from './steam-shortcuts.js';
+import { STEAM_COMMAND, steamArgument, type SteamLaunch } from './steam-shortcuts.js';
 
 export type ShortcutDestination = 'desktop' | 'applications';
 const validId = (id: string) => /^[a-f0-9]{16}$/.test(id);
@@ -191,7 +191,7 @@ export class GameShortcuts {
     if (game && (game.installState !== 'ready' || !validId(game.id))) throw Error('Only installed, ready games can be added to Steam.');
     const entry = game ? this.entry : this.nexusEntry;
     return { title: game ? game.title.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 256) || 'Xodus Nexus game' : 'Xodus Nexus',
-      executable: steamArgument('/bin/sh'), options: steamArgument(entry) + (game ? ' ' + steamArgument(game.id) : ''),
+      executable: steamArgument('/bin/sh'), options: steamArgument(entry) + (game ? ' ' + steamArgument(game.id) + STEAM_COMMAND : ''),
       directory: path.dirname(entry), identity: this.profileId + ':' + (game?.id ?? 'launcher'),
       icon: game ? await this.gameIcon(game.id, png) : this.icon };
   }
