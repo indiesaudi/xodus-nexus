@@ -125,7 +125,7 @@ export class GameController {
     // Keep the "Xodus Nexus" entry in Steam's Compatibility dropdown on the current runtime.
     if (this.runtime.current.winePath) {
       await registerNexusTool(os.homedir(), protonRootOf(this.runtime.current.winePath))
-        .then(changed => { if (changed.length) this.options.log(`Registered the Xodus Nexus compatibility tool in ${changed.join(', ')}; Steam lists it after a restart.`); })
+        .then(({ changed }) => { if (changed.length) this.options.log(`Registered the Xodus Nexus compatibility tool in ${changed.join(', ')}; Steam lists it after a restart.`); })
         .catch(error => this.options.log(`Could not register the Xodus Nexus compatibility tool: ${(error as Error).message}`));
     }
     this.connectivity.start();

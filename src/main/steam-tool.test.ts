@@ -52,7 +52,7 @@ describe.skipIf(!linux)('Xodus Nexus compatibility tool', () => {
     await fs.mkdir(steam, { recursive: true, mode: 0o755 });
     const manifest = '"manifest"\n{\n  "version" "2"\n  "commandline" "/proton %verb%"\n  "require_tool_appid" "4185400"\n}\n';
     const root = await runtime(manifest);
-    expect(await registerNexusTool(home, root)).toEqual([steam]);
+    expect(await registerNexusTool(home, root)).toEqual({ changed: [steam], created: [steam] });
     const tool = path.join(steam, 'compatibilitytools.d', NEXUS_TOOL_NAME);
     expect(await fs.readFile(path.join(tool, 'compatibilitytool.vdf'), 'utf8')).toContain('"display_name" "Xodus Nexus"');
     expect(await fs.readFile(path.join(tool, 'toolmanifest.vdf'), 'utf8')).toBe(manifest);
@@ -60,8 +60,13 @@ describe.skipIf(!linux)('Xodus Nexus compatibility tool', () => {
     expect((await fs.stat(path.join(tool, 'proton'))).mode & 0o777).toBe(0o755);
     expect(await isNexusTool(tool)).toBe(true);
     expect(await isNexusTool(root)).toBe(false);
-    // Unchanged files are not rewritten.
-    expect(await registerNexusTool(home, root)).toEqual([]);
+    // Unchanged files are not rewritten, and the tool is no longer new.
+    expect(await registerNexusTool(home, root)).toEqual({ changed: [], created: [] });
+    // A runtime update rewrites the hand-over but keeps the known tool name.
+    const update = path.join(path.dirname(root), 'runtime-b');
+    await fs.mkdir(update);
+    await fs.writeFile(path.join(update, 'proton'), '#!/usr/bin/env python3\n', { mode: 0o755 });
+    expect(await registerNexusTool(home, update)).toEqual({ changed: [steam], created: [] });
   });
 
   it('refuses a symlinked tool directory and needs a runnable runtime', async () => {

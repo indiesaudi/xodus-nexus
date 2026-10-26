@@ -78,21 +78,24 @@ export async function nexusToolFiles(runtimeRoot: string): Promise<Record<string
 
 /**
  * Registers or refreshes the tool in every native Steam installation. Returns
- * the roots where it was new or changed (Steam lists new tools after a restart).
+ * the roots where files changed, and those where the tool is new: Steam lists
+ * a new tool only after a restart, so it cannot be selected there before.
  */
-export async function registerNexusTool(home: string, runtimeRoot: string): Promise<string[]> {
+export async function registerNexusTool(home: string, runtimeRoot: string): Promise<{ changed: string[]; created: string[] }> {
   const files = await nexusToolFiles(runtimeRoot);
-  const changed: string[] = [];
+  const changed: string[] = [], created: string[] = [];
   for (const root of await steamRoots(home)) {
     const tools = path.join(root, 'compatibilitytools.d');
     await ownedDirectory(tools, true);
     const directory = path.join(tools, NEXUS_TOOL_NAME);
+    const isNew = !await isNexusTool(directory);
     await ownedDirectory(directory, true);
     let any = false;
     for (const [name, file] of Object.entries(files)) any = await writeIfChanged(path.join(directory, name), file.content, file.mode) || any;
     if (any) changed.push(root);
+    if (isNew) created.push(root);
   }
-  return changed;
+  return { changed, created };
 }
 
 /**
