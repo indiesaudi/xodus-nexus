@@ -247,18 +247,31 @@ describe.skipIf(!linux)('Steam prefix and overlay', () => {
     expect(await overlayRuntime(path.join(releases, 'runtime-x86_64'), 'aarch64-windows')).toMatchObject({ root: path.join(releases, 'runtime-aarch64') });
   });
 
-  it('adds d3dcompiler_47 when the runtime carries it', async () => {
+  it('never takes an arm64 runtime\'s components for an x86_64 Proton', async () => {
+    const compat = await compatData();
+    const command = await steamProton(compat);
+    const nexus = await runtime('aarch64-windows');
+    // Real arm64 assemblies also keep their arm64 checksums in `components`.
+    const metadata = JSON.parse(await fs.readFile(path.join(nexus, 'XODUS_NEXUS_PATCH.json'), 'utf8'));
+    metadata.components = metadata.componentsByArch['aarch64-windows'];
+    await fs.writeFile(path.join(nexus, 'XODUS_NEXUS_PATCH.json'), JSON.stringify(metadata));
+    await expect(prepareSteamOverlay(command, nexus, { STEAM_COMPAT_DATA_PATH: compat }, () => {})).rejects.toThrow('No installed Nexus runtime has x86_64-windows components');
+  });
+
+  it('leaves graphics components to the player\'s Proton even when the runtime carries them', async () => {
     const compat = await compatData();
     const command = await steamProton(compat);
     const nexus = await runtime();
-    const bytes = Buffer.from('arm64x d3dcompiler');
+    const bytes = Buffer.from('nexus d3dcompiler');
     await fs.writeFile(path.join(nexus, 'files/lib/wine/x86_64-windows/d3dcompiler_47.dll'), bytes);
     const metadata = JSON.parse(await fs.readFile(path.join(nexus, 'XODUS_NEXUS_PATCH.json'), 'utf8'));
     metadata.componentsByArch['x86_64-windows']['d3dcompiler_47.dll'] = createHash('sha256').update(bytes).digest('hex');
     await fs.writeFile(path.join(nexus, 'XODUS_NEXUS_PATCH.json'), JSON.stringify(metadata));
-    const overlay = await prepareSteamOverlay(command, nexus, { STEAM_COMPAT_DATA_PATH: compat }, () => {});
-    expect(await fs.readFile(path.join(compat, 'pfx/drive_c/windows/system32/d3dcompiler_47.dll'), 'utf8')).toBe('arm64x d3dcompiler');
-    expect(overlay.environment.WINEDLLOVERRIDES).toContain(',d3dcompiler_47=n,b');
+    const lines: string[] = [];
+    const overlay = await prepareSteamOverlay(command, nexus, { STEAM_COMPAT_DATA_PATH: compat }, line => lines.push(line));
+    await expect(fs.access(path.join(compat, 'pfx/drive_c/windows/system32/d3dcompiler_47.dll'))).rejects.toThrow();
+    expect(overlay.environment.WINEDLLOVERRIDES).not.toContain('d3dcompiler');
+    expect(lines.join('\n')).toContain('Steam Proton graphics: DXVK unknown, vkd3d unknown.');
   });
 
   it('refuses a symlinked system32 in the Steam prefix', async () => {

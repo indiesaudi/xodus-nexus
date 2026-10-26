@@ -284,7 +284,10 @@ export async function runtimeComponentChecksums(protonRoot: string, peArch: Prot
   const metadata = JSON.parse(await fs.readFile(path.join(protonRoot, 'XODUS_NEXUS_PATCH.json'), 'utf8')) as {
     components?: Record<string, string>; componentsByArch?: Record<string, Record<string, string>>;
   };
-  return metadata.componentsByArch?.[peArch] ?? (peArch === 'x86_64-windows' ? metadata.components : undefined);
+  // An arm64 assembly's `components` are its arm64 checksums: the x86_64
+  // fallback is only for older runtimes without `componentsByArch`.
+  if (metadata.componentsByArch) return metadata.componentsByArch[peArch];
+  return peArch === 'x86_64-windows' ? metadata.components : undefined;
 }
 
 /** Reads and checks every named runtime component before any prefix entry changes. */

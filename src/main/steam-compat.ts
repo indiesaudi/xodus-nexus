@@ -89,11 +89,13 @@ export function wrapperPrefix(wrappers: readonly string[]): string[] {
 }
 
 /**
- * The overlay: the runtime's GDK and service DLLs, loaded natively in any
- * Proton. Not mscoree: loaded as native it cannot find the Proton's Mono.
+ * The overlay: only what Xbox PC games need from the Nexus runtime to run at
+ * all (the GDK runtime, Xbox service networking and app state), loaded
+ * natively in any Proton. Graphics (DXVK, vkd3d, d3dcompiler) and mscoree stay
+ * the player's Proton's own: its fixes are its choice, and a native mscoree
+ * cannot find the Proton's Mono.
  */
 export const OVERLAY_COMPONENTS = ['xgameruntime.dll', 'winhttp.dll', 'libnghttp2.dll', 'windows.web.dll', 'twinapi.appcore.dll'];
-const OPTIONAL_OVERLAY_COMPONENTS = ['d3dcompiler_47.dll'];
 const overlayOverrides = (names: string[]) => {
   const wine = names.filter(name => name !== 'libnghttp2.dll').map(name => name.replace(/\.dll$/, ''));
   return `${wine.join(',')}=n,b;libnghttp2=n`;
@@ -242,9 +244,8 @@ export async function prepareSteamOverlay(command: SteamProtonCommand, nexusProt
   const runtime = await overlayRuntime(nexusProtonRoot, layout.peArch);
   if (!runtime) throw new Error(`No installed Nexus runtime has ${layout.peArch} components for this Proton. Install the Nexus runtime for that architecture or clear the compatibility tool in Steam.`);
   if (runtime.root !== nexusProtonRoot) onLine(`Using the ${layout.peArch} components of the installed Nexus runtime ${path.basename(runtime.root)}.`);
-  // Validate before Proton or Nexus changes anything in the prefix. The
-  // ARM64X d3dcompiler_47 carries the shader fix on arm64; take it when present.
-  const names = [...OVERLAY_COMPONENTS, ...OPTIONAL_OVERLAY_COMPONENTS.filter(name => runtime.checksums[name])];
+  // Validate before Proton or Nexus changes anything in the prefix.
+  const names = [...OVERLAY_COMPONENTS];
   const components = await verifiedRuntimeComponents(runtime.root, layout.peArch, runtime.checksums, names);
   await requireSameArchitecture(prefix, layout);
   if (!await prefixReady(compatData, command.protonRoot)) {
@@ -261,6 +262,11 @@ export async function prepareSteamOverlay(command: SteamProtonCommand, nexusProt
   }
   await installRuntimeComponents(prefix, components.map(({ name, bytes }) => ({ name, bytes: withoutBuiltinMarker(bytes) })));
   onLine(`Applied the Nexus runtime overlay (${layout.peArch}) to the Steam prefix ${prefix}.`);
+  // Graphics stay the Proton's own; its versions explain shader differences
+  // from the Nexus runtime.
+  const versions = await Promise.all(['wine/dxvk', 'vkd3d'].map(library =>
+    fs.readFile(path.join(command.protonRoot, 'files', 'lib', library, 'version'), 'utf8').then(text => text.match(/\(([^)]+)\)/)?.[1], () => undefined)));
+  onLine(`Steam Proton graphics: DXVK ${versions[0] ?? 'unknown'}, vkd3d ${versions[1] ?? 'unknown'}.`);
   const overrides = [env.WINEDLLOVERRIDES, overlayOverrides(names)].filter(Boolean).join(';');
   return { layout, environment: { WINEDLLOVERRIDES: overrides }, playfabAdapter: () => checkedPlayfabAdapter(runtime.root) };
 }
