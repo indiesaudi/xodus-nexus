@@ -502,6 +502,8 @@ test('a full launch view runs on any Wine without file maps and only in a privat
   // No fallback next to the game or in /tmp, and an owner-only view directory.
   assert.match(patch, /None if all => \{\s*\n\+\s*return Err/);
   assert.match(patch, /metadata\.mode\(\) & 0o077 != 0/);
+  // Every launch view, the executable-only one next to the game included, is 0700.
+  assert.match(patch, /^\+\s*std::fs::set_permissions\(mirror\.path\(\), std::fs::Permissions::from_mode\(0o700\)\)\?;/m);
   // File maps, inherited memfds and the PlayFab token stay out of a full view.
   assert.match(patch, /if materialize_all \{[\s\S]*?flags\.insert\(FdFlags::CLOEXEC\)/);
   assert.match(patch, /^\+\s*\.env\("WINE_DLL_FILE_MAP", env_value\)/m);

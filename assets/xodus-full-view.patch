@@ -9,10 +9,13 @@ directory of this user with mode 0700; there is no fallback next to the game
 or in /tmp. Executables keep the PE checks of the launch chain; other
 encrypted files are copied as is. The decrypted memfds are closed on exec, so
 Wine, Proton and the game do not inherit them, and no PlayFab token is passed
-in the environment of a full view. Without the flag nothing changes.
+in the environment of a full view. Without the flag nothing changes,
+except that every launch view directory, including the executable-only one
+next to the game, is now created with mode 0700 instead of the umask's
+(often 0755), so other users cannot read decrypted executables.
 
 diff --git a/crates/xodus-cli/src/commands/run.rs b/crates/xodus-cli/src/commands/run.rs
-index e3c46ac..9da443b 100644
+index e3c46ac..972f74d 100644
 --- a/crates/xodus-cli/src/commands/run.rs
 +++ b/crates/xodus-cli/src/commands/run.rs
 @@ -1,6 +1,6 @@
@@ -86,7 +89,7 @@ index e3c46ac..9da443b 100644
              decrypted.insert(checked_relative_path(name)?, *fd);
          }
      }
-@@ -250,11 +300,25 @@ fn create_launch_chain_mirror(
+@@ -250,11 +300,28 @@ fn create_launch_chain_mirror(
          }
      }
      let decrypted_files: HashSet<PathBuf> = decrypted.keys().cloned().collect();
@@ -114,10 +117,13 @@ index e3c46ac..9da443b 100644
 +                .or_else(|_| Builder::new().prefix("xodus-chain-").tempdir())?
 +        }
 +    };
++    // tempfile creates the directory with the umask's mode (often 0755); the
++    // decrypted images inside must be readable by this user only.
++    std::fs::set_permissions(mirror.path(), std::fs::Permissions::from_mode(0o700))?;
      populate_launch_view(
          source_root,
          mirror.path(),
-@@ -264,7 +328,12 @@ fn create_launch_chain_mirror(
+@@ -264,7 +331,12 @@ fn create_launch_chain_mirror(
      )?;
      let mut bytes = 0;
      for (relative, fd) in &decrypted {
@@ -131,7 +137,7 @@ index e3c46ac..9da443b 100644
      }
      let executable_count = decrypted.len();
      let entry = mirror.path().join(entry_path);
-@@ -467,11 +536,21 @@ pub async fn run(
+@@ -467,11 +539,21 @@ pub async fn run(
      exe: Option<String>,
      materialize_exe: bool,
      materialize_chain: bool,
@@ -153,7 +159,7 @@ index e3c46ac..9da443b 100644
  
      let out: &Path = Path::new(&source);
      let out_absolute = std::fs::canonicalize(out).unwrap();
-@@ -587,11 +666,12 @@ pub async fn run(
+@@ -587,11 +669,12 @@ pub async fn run(
      let entry_suffix = entry_name.trim_start_matches('\\');
  
      let (launch_mirror, stub_path, mirror_nt_prefix) = if materialize_chain {
@@ -168,7 +174,7 @@ index e3c46ac..9da443b 100644
                      bytes,
                      mirror.path().display()
                  );
-@@ -655,17 +735,38 @@ pub async fn run(
+@@ -655,17 +738,38 @@ pub async fn run(
      }
  
      let mut command = Command::new(wine);
@@ -212,7 +218,15 @@ index e3c46ac..9da443b 100644
          eprintln!("Microsoft is unreachable; skipping PlayFab authorisation (the runtime signs in with its cached identity)");
      } else {
          match playfab_auth_header(client, tokens).await {
-@@ -883,6 +984,76 @@ mod tests {
+@@ -866,6 +970,7 @@ mod tests {
+ 
+         let (mirror, entry, count, bytes) =
+             create_launch_chain_mirror(&source, &launcher_name, &files).unwrap();
++        assert_eq!(std::fs::metadata(mirror.path()).unwrap().mode() & 0o777, 0o700);
+         assert_eq!(entry, mirror.path().join("Dungeons.exe"));
+         assert_eq!(count, 2);
+         assert_eq!(bytes, 2048);
+@@ -883,6 +988,76 @@ mod tests {
          assert_eq!(std::fs::read(nested.join("Shipping.exe")).unwrap(), b"encrypted child");
      }
  

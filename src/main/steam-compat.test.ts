@@ -65,9 +65,10 @@ describe.skipIf(!linux)('Steam prefix and overlay', () => {
     const protonRoot = path.join(root, 'GE-Proton');
     await fs.mkdir(path.join(protonRoot, 'files/bin'), { recursive: true });
     await fs.writeFile(path.join(protonRoot, 'files/bin/wine'), Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0, ...Array(10).fill(0), 0x3e, 0]));
-    await fs.writeFile(path.join(protonRoot, 'version'), '1 GE-Proton10\n');
-    await fs.writeFile(path.join(protonRoot, 'proton'), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
-    await fs.writeFile(path.join(compat, 'version'), '1 GE-Proton10\n');
+    // compatdata/version holds the script's CURRENT_PREFIX_VERSION, not the version file.
+    await fs.writeFile(path.join(protonRoot, 'version'), '1792526967 ge-proton10\n');
+    await fs.writeFile(path.join(protonRoot, 'proton'), `#!/bin/sh\n#CURRENT_PREFIX_VERSION is read by Nexus\nCURRENT_PREFIX_VERSION="GE-Proton10"\n${script}\n`, { mode: 0o755 });
+    await fs.writeFile(path.join(compat, 'version'), 'GE-Proton10\n');
     return { prefix: [path.join(protonRoot, 'proton'), 'waitforexitandrun'], protonRoot };
   }
 
@@ -89,6 +90,38 @@ describe.skipIf(!linux)('Steam prefix and overlay', () => {
     expect(overlay.layout.peArch).toBe('x86_64-windows');
     expect(overlay.environment.WINEDLLOVERRIDES).toMatch(/^dinput8=n,b;xgameruntime,.*=n,b;libnghttp2=n$/);
     expect(lines.join('\n')).toContain('Applied the Nexus runtime overlay');
+  });
+
+  it('installs Wine-built components without the builtin marker so Proton\'s own builtin is not swapped in', async () => {
+    const compat = await compatData();
+    const command = await steamProton(compat);
+    const nexus = await runtime();
+    const built = Buffer.alloc(0x80);
+    built.write('MZ', 0, 'latin1');
+    built.write('Wine builtin DLL', 0x40, 'latin1');
+    await fs.writeFile(path.join(nexus, 'files/lib/wine/x86_64-windows/winhttp.dll'), built);
+    const metadata = JSON.parse(await fs.readFile(path.join(nexus, 'XODUS_NEXUS_PATCH.json'), 'utf8'));
+    metadata.componentsByArch['x86_64-windows']['winhttp.dll'] = createHash('sha256').update(built).digest('hex');
+    await fs.writeFile(path.join(nexus, 'XODUS_NEXUS_PATCH.json'), JSON.stringify(metadata));
+    const overlay = await prepareSteamOverlay(command, nexus, { STEAM_COMPAT_DATA_PATH: compat }, () => {});
+    const installed = await fs.readFile(path.join(compat, 'pfx/drive_c/windows/system32/winhttp.dll'));
+    expect(installed.subarray(0x40, 0x50)).toEqual(Buffer.alloc(16));
+    expect(Buffer.concat([installed.subarray(0, 0x40), installed.subarray(0x50)])).toEqual(Buffer.concat([built.subarray(0, 0x40), built.subarray(0x50)]));
+    // Proton's Mono only works with its own mscoree.
+    expect(OVERLAY_COMPONENTS).not.toContain('mscoree.dll');
+    expect(overlay.environment.WINEDLLOVERRIDES).not.toContain('mscoree');
+  });
+
+  it('runs Proton\'s setup only when the prefix version differs from its CURRENT_PREFIX_VERSION', async () => {
+    const compat = await compatData();
+    const marker = path.join(root, 'setup-ran');
+    const command = await steamProton(compat, `: > '${marker}'; printf 'GE-Proton10\\n' > "$STEAM_COMPAT_DATA_PATH/version"`);
+    await prepareSteamOverlay(command, await runtime(), { STEAM_COMPAT_DATA_PATH: compat }, () => {});
+    await expect(fs.access(marker)).rejects.toThrow();
+    await fs.writeFile(path.join(compat, 'version'), 'GE-Proton9\n');
+    await fs.rm(path.join(root, 'nexus-runtime'), { recursive: true });
+    await prepareSteamOverlay(command, await runtime(), { STEAM_COMPAT_DATA_PATH: compat }, () => {});
+    await fs.access(marker);
   });
 
   it('changes nothing when a component checksum or the architecture does not match', async () => {
@@ -185,6 +218,17 @@ describe.skipIf(!linux)('Steam prefix and overlay', () => {
     expect(directory).toBe(path.join(runtimeDir, 'xodus-nexus/views/abc123def456'));
     expect((await fs.stat(directory)).mode & 0o777).toBe(0o700);
     await expect(launchViewDirectory({}, 'abc123def456')).rejects.toThrow('XDG_RUNTIME_DIR');
+    // Views a force-stopped backend left behind go before the next launch; nothing else does.
+    await fs.mkdir(path.join(directory, '.xodus-chain-stale/Bin'), { recursive: true });
+    await fs.writeFile(path.join(directory, '.xodus-chain-stale/Bin/Code.dll'), 'decrypted');
+    const outside = path.join(root, 'outside');
+    await fs.mkdir(outside);
+    await fs.writeFile(path.join(outside, 'keep'), 'x');
+    await fs.symlink(outside, path.join(directory, '.xodus-chain-stale/link'));
+    await fs.writeFile(path.join(directory, 'other'), 'x');
+    await launchViewDirectory({ XDG_RUNTIME_DIR: runtimeDir }, 'abc123def456');
+    expect(await fs.readdir(directory)).toEqual(['other']);
+    expect(await fs.readdir(outside)).toEqual(['keep']);
   });
 
   it('writes a launcher that runs Steam\'s command with the view entry appended', async () => {

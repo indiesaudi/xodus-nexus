@@ -33,8 +33,11 @@ export function steamProtonCommand(words: readonly string[] | undefined): SteamP
   return undefined;
 }
 
-/** The overlay: the runtime's GDK and service DLLs, loaded natively in any Proton. */
-export const OVERLAY_COMPONENTS = ['xgameruntime.dll', 'winhttp.dll', 'mscoree.dll', 'libnghttp2.dll', 'windows.web.dll', 'twinapi.appcore.dll'];
+/**
+ * The overlay: the runtime's GDK and service DLLs, loaded natively in any
+ * Proton. Not mscoree: loaded as native it cannot find the Proton's Mono.
+ */
+export const OVERLAY_COMPONENTS = ['xgameruntime.dll', 'winhttp.dll', 'libnghttp2.dll', 'windows.web.dll', 'twinapi.appcore.dll'];
 const OPTIONAL_OVERLAY_COMPONENTS = ['d3dcompiler_47.dll'];
 const overlayOverrides = (names: string[]) => {
   const wine = names.filter(name => name !== 'libnghttp2.dll').map(name => name.replace(/\.dll$/, ''));
@@ -62,16 +65,35 @@ export async function steamCompatData(env: NodeJS.ProcessEnv): Promise<{ compatD
   return { compatData, prefix: path.join(compatData, 'pfx') };
 }
 
-/** Whether Proton has set up (or upgraded) the prefix to its own version. */
+/**
+ * Whether Proton has set up (or upgraded) the prefix to its own version: it
+ * writes the `CURRENT_PREFIX_VERSION` of its `proton` script (not the content
+ * of its `version` file) to `compatdata/<appid>/version`.
+ */
 async function prefixReady(compatData: string, protonRoot: string): Promise<boolean> {
   try {
     await fs.access(path.join(compatData, 'pfx', 'drive_c', 'windows', 'system32'));
-    const [prefixVersion, protonVersion] = await Promise.all([
+    const [prefixVersion, script] = await Promise.all([
       fs.readFile(path.join(compatData, 'version'), 'utf8'),
-      fs.readFile(path.join(protonRoot, 'version'), 'utf8'),
+      fs.readFile(path.join(protonRoot, 'proton'), 'utf8'),
     ]);
-    return prefixVersion.trim() === protonVersion.trim();
+    const current = script.match(/^CURRENT_PREFIX_VERSION\s*=\s*["']([^"'\n]+)["']/m)?.[1];
+    return Boolean(current) && prefixVersion.trim() === current;
   } catch { return false; }
+}
+
+const BUILTIN_MARKER = Buffer.from('Wine builtin DLL');
+
+/**
+ * Wine replaces a system32 file that carries its builtin marker with the
+ * Proton's own builtin of that name, so the overlay is installed without the
+ * marker (after its checksum was verified) and loads as the native override.
+ */
+export function withoutBuiltinMarker(bytes: Buffer): Buffer {
+  if (!bytes.subarray(0x40, 0x40 + BUILTIN_MARKER.length).equals(BUILTIN_MARKER)) return bytes;
+  const copy = Buffer.from(bytes);
+  copy.fill(0, 0x40, 0x40 + BUILTIN_MARKER.length);
+  return copy;
 }
 
 /**
@@ -169,7 +191,7 @@ export async function prepareSteamOverlay(command: SteamProtonCommand, nexusProt
   for (const directory of [prefix, path.join(prefix, 'drive_c'), path.join(prefix, 'drive_c', 'windows'), path.join(prefix, 'drive_c', 'windows', 'system32')]) {
     await ownedDirectory(directory, 'Steam prefix directory');
   }
-  await installRuntimeComponents(prefix, components);
+  await installRuntimeComponents(prefix, components.map(({ name, bytes }) => ({ name, bytes: withoutBuiltinMarker(bytes) })));
   onLine(`Applied the Nexus runtime overlay (${layout.peArch}) to the Steam prefix ${prefix}.`);
   const overrides = [env.WINEDLLOVERRIDES, overlayOverrides(names)].filter(Boolean).join(';');
   return { layout, environment: { WINEDLLOVERRIDES: overrides } };
@@ -190,6 +212,12 @@ export async function launchViewDirectory(env: NodeJS.ProcessEnv, profileId: str
     await fs.mkdir(directory, { mode: 0o700 }).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; });
     await ownedDirectory(directory, 'launch view directory');
     await fs.chmod(directory, 0o700);
+  }
+  // A force-stopped backend (SIGTERM/SIGKILL) cannot remove its view. One
+  // game runs per profile, so views left here are stale before a launch.
+  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith('.xodus-chain-')) continue;
+    await fs.rm(path.join(directory, entry.name), { recursive: true, force: true });
   }
   return directory;
 }
