@@ -492,9 +492,7 @@ test('a full launch view runs on any Wine without file maps and only in a privat
   assert.ok(entry);
   const patch = await fs.readFile(`assets/${entry.file}`, 'utf8');
   assert.equal(createHash('sha256').update(patch).digest('hex'), entry.sha256);
-  assert.equal(lock.patches.at(-1).file, entry.file);
-  assert.equal(lock.version, '0.2.16');
-  assert.equal(lock.patchId, 'linux-run-v47');
+  assert.ok(lock.patches.findIndex(p => p.file === entry.file) > lock.patches.findIndex(p => p.file === 'xodus-license-refresh.patch'));
   const files = [...patch.matchAll(/^diff --git a\/(\S+) b\/\S+$/gm)].map(match => match[1]);
   assert.deepEqual(files.sort(), ['crates/xodus-cli/src/commands/run.rs', 'crates/xodus-cli/src/main.rs']);
   assert.match(patch, /requires = "view_dir"/);
@@ -511,4 +509,32 @@ test('a full launch view runs on any Wine without file maps and only in a privat
   assert.match(patch, /full_view_materializes_every_encrypted_file_in_the_private_view_directory/);
   assert.match(patch, /full_view_requires_a_private_absolute_view_directory/);
   await fs.access('.github/release-notes/backend-0.2.16.md');
+});
+
+test('a full launch view stages the PlayFab Game Saves adapter only for the exact SDK contract', async () => {
+  const lock = JSON.parse(await fs.readFile('assets/backend-source.lock.json', 'utf8'));
+  const entry = lock.patches.find(p => p.file === 'xodus-playfab-view-adapter.patch');
+  assert.ok(entry);
+  const patch = await fs.readFile(`assets/${entry.file}`, 'utf8');
+  assert.equal(createHash('sha256').update(patch).digest('hex'), entry.sha256);
+  assert.equal(lock.patches.at(-1).file, entry.file);
+  assert.ok(lock.patches.findIndex(p => p.file === entry.file) > lock.patches.findIndex(p => p.file === 'xodus-full-view.patch'));
+  assert.equal(lock.version, '0.2.16');
+  assert.equal(lock.patchId, 'linux-run-v48');
+  const files = [...patch.matchAll(/^diff --git a\/(\S+) b\/\S+$/gm)].map(match => match[1]);
+  assert.deepEqual(files.sort(), ['crates/xodus-cli/src/commands/run.rs', 'crates/xodus-cli/src/main.rs']);
+  assert.match(patch, /long = "playfab-adapter",\s*\n\+\s*requires = "materialize_all"/);
+  // The same 40 exports, in order, as the runtime's adapter definition.
+  const definition = await fs.readFile('scripts/runtime-compat/playfab-save-folder.def', 'utf8');
+  const names = [...definition.matchAll(/^(PF\w+)(?:=\S+)? @\d+$/gm)].map(match => match[1]);
+  const list = patch.match(/const PLAYFAB_SDK_EXPORTS: \[&str; 40\] = \[\n([\s\S]*?)\n\+\];/);
+  assert.ok(list);
+  assert.deepEqual([...list[1].matchAll(/"(PF\w+)"/g)].map(match => match[1]), names);
+  // Fail closed and never write through a game-file symlink.
+  assert.match(patch, /unsupported PlayFab SDK export contract; left unchanged/);
+  assert.match(patch, /refusing a partial launch/);
+  assert.match(patch, /create_new\(true\)/);
+  assert.match(patch, /playfabgamesave=n;nexus_pgs_native=n/);
+  assert.match(patch, /playfab_adapter_is_staged_in_real_view_directories_without_touching_the_game/);
+  assert.match(patch, /playfab_contract_accepts_only_the_exact_sdk_exports/);
 });

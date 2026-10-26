@@ -65,6 +65,7 @@ import { openDesktopTarget } from './desktop-open.js';
 import { addSteamShortcut, steamAccounts, steamRunning } from './steam-shortcuts.js';
 import { gameSteamPortrait, nexusSteamArtwork } from './steam-artwork.js';
 import { addLiveSteamShortcut } from './steam-live.js';
+import { NEXUS_TOOL_NAME, registerNexusTool } from './steam-tool.js';
 import { DownloadCompletionNotifications } from './download-notifications.js';
 import { KeyringSupport } from './keyring.js';
 import { WalletUnlocker } from './keyring-unlock.js';
@@ -392,6 +393,20 @@ function ensureIdle(mode?: 'install' | 'launch' | 'remove'): void {
 async function syncManagedWinePath(): Promise<void> {
   const selected = selectedWinePath(store.settings.winePath, store.settings.runtimeRoot, runtime.current.winePath);
   if (selected && selected !== store.settings.winePath) await store.setSettings({ winePath: selected });
+  await syncNexusSteamTool();
+}
+
+/** Keeps the "Xodus Nexus" entry in Steam's Compatibility dropdown on the current runtime. */
+async function syncNexusSteamTool(): Promise<boolean> {
+  if (process.platform !== 'linux' || demoMode || !runtime.current.winePath) return false;
+  try {
+    const changed = await registerNexusTool(os.homedir(), protonRootOf(runtime.current.winePath));
+    if (changed.length) console.log(`Registered the Xodus Nexus compatibility tool in ${changed.join(', ')}; Steam lists it after a restart.`);
+    return true;
+  } catch (error) {
+    console.error('Could not register the Xodus Nexus compatibility tool:', error);
+    return false;
+  }
 }
 
 const accountRefresh = new AccountRefresh();
@@ -1468,7 +1483,9 @@ function registerIpc(): void {
       selected = choice.response;
       if (selected >= accounts.length) throw Error('Add to Steam cancelled.');
     }
-    return addSteamShortcut(accounts[selected], launch, artwork);
+    // New game shortcuts use the Xodus Nexus tool unless the player already picked one.
+    const tool = game && await syncNexusSteamTool() ? NEXUS_TOOL_NAME : undefined;
+    return addSteamShortcut(accounts[selected], launch, artwork, undefined, tool);
   });
   ipcMain.handle('create-game-shortcut', async (_event, id: string, destination: ShortcutDestination) => {
     const game = store.games.find(entry => entry.id === id);

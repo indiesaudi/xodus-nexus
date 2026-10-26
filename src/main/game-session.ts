@@ -2,7 +2,9 @@ import { constants, createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { BackendStatus, ConnectivityStatus, DownloadTask, Game, GameOperation, RuntimeStatus } from '../shared/types.js';
 import { inspectGameDirectory } from './store.js';
-import { prepareProtonRunner, syncPrefixUserLocale, syncUnrealCultureGameIni } from './proton.js';
+import { prefixUserLocale, prepareProtonRunner, syncPrefixUserLocale, syncUnrealCultureGameIni } from './proton.js';
+import { isNexusTool } from './steam-tool.js';
+import { applyPrefixSettings } from './wine-registry.js';
 import { accountCacheKey } from './offline-identity.js';
 import { cloudSaveRuntime, selectedWinePath, unbridgedCloudSaveRuntime } from './xodus-service.js';
 import { GameLogReducer, gameLoggingEnvironment, gameWindowEnvironment } from './game-log.js';
@@ -148,7 +150,10 @@ export class GameSession {
     // its cached identity, instead of each waiting for its own connect timeout.
     const reachability: ConnectivityStatus = deps.connectivity ? await deps.connectivity.check() : { state: 'unknown' };
     const offlineLaunch = reachability.state === 'offline';
-    const steamProton = steamProtonCommand(options.steamCommand);
+    const selectedProton = steamProtonCommand(options.steamCommand);
+    // The "Xodus Nexus" entry in Steam's dropdown is the Nexus runtime itself.
+    const nexusTool = Boolean(selectedProton && await isNexusTool(selectedProton.protonRoot));
+    const steamProton = nexusTool ? undefined : selectedProton;
     if (steamProton && !backend.capabilities.fullView) throw new Error("Steam's compatibility tool needs a newer Xodus backend. Update the backend in Settings, or clear the compatibility tool for this game in Steam.");
     const args = gameLaunchArguments(inspected, wine, store.settings.market, backend.linuxRunPatch,
       backend.capabilities.licenseCache ? licenseCacheDirectory(dataRoot) : undefined,
@@ -192,6 +197,7 @@ export class GameSession {
     writeLaunchLog(`Backend: ${binary}`);
     writeLaunchLog(`Wine: ${wine}`);
     if (steamProton) writeLaunchLog(`Compatibility tool: Steam's ${steamProton.protonRoot}`);
+    else if (nexusTool) writeLaunchLog('Compatibility tool: Xodus Nexus (the Nexus runtime)');
     writeLaunchLog(`Connectivity: ${reachability.state}${reachability.reason ? ` (${reachability.reason})` : ''}; offline launch: ${offlineLaunch ? 'yes' : 'no'}`);
     changed(true);
     let service: AcquiredService | undefined;
@@ -222,6 +228,13 @@ export class GameSession {
         addGameLog(`Running the game inside the shortcut's launch wrappers: ${wrappers.join(' ')}`);
       }
       if (viewDirectory) args.splice(args.indexOf('--materialize-chain') + 1, 0, '--materialize-all', '--view-dir', viewDirectory);
+      // The Nexus runtime's launcher puts its PlayFab Game Saves adapter in its
+      // own views; for another Proton the backend stages it in the full view.
+      if (overlay && baseEnvironment.NEXUS_PLAYFAB_ADAPTER !== '0') {
+        const adapter = await overlay.playfabAdapter();
+        if (adapter && backend.capabilities.playfabAdapter) args.splice(args.indexOf('--view-dir') + 2, 0, '--playfab-adapter', adapter);
+        else addGameLog('The PlayFab Game Saves adapter is unavailable for this compatibility tool; games that need it may not find their saves.');
+      }
       const gamePrefix = steamPrefix ?? (protonRunner ? path.join(compatibilityDataPath, 'pfx') : legacyPrefixRoot);
       if (inspected.vcRedistEncrypted) {
         if (!protonRunner && !steamPrefix) throw new Error('This encrypted VC++ prerequisite requires a Proton prefix. Select Xodus Runtime in Settings.');
@@ -249,12 +262,15 @@ export class GameSession {
         environment.XODUS_FORCE_OFFLINE = '1';
         addGameLog(`Microsoft is unreachable (${reachability.reason ?? 'no answer'}); launching offline with the stored license and the cached Xbox identity.`);
       }
-      if (locale) {
-        addGameLog(`Selected package language: ${locale}.`);
-        // Steam's Proton has no Wine command to run outside its own launch.
-        if (steamProton) addGameLog('The Windows user locale of a Steam Proton prefix is not changed; the game may keep its previous language.');
-        else await syncPrefixUserLocale(wineCommand, gamePrefix, locale, environment, addGameLog);
-      }
+      if (locale) addGameLog(`Selected package language: ${locale}.`);
+      if (steamPrefix) {
+        // No Windows helper can run outside Steam's own launch here: the same
+        // settings go straight into the prefix's registry files.
+        await applyPrefixSettings(steamPrefix, {
+          gamingServices: baseEnvironment.NEXUS_GAMING_SERVICES_VERSION_OVERRIDE !== '0',
+          resetLocale: Boolean(locale?.includes('-')) && await prefixUserLocale(steamPrefix) !== locale,
+        }, addGameLog);
+      } else if (locale) await syncPrefixUserLocale(wineCommand, gamePrefix, locale, environment, addGameLog);
       await syncUnrealCultureGameIni(gamePrefix, game.path, titleId, locale, addGameLog);
       if (cloudRuntime) {
         service = await deps.services.acquire(binary, deps.paths.userData, addGameLog);

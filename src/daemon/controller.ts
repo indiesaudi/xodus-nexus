@@ -15,6 +15,8 @@ import { WarmServiceSessions } from '../main/service-sessions.js';
 import { readAccount } from '../main/account-refresh.js';
 import { GameLogReducer } from '../main/game-log.js';
 import { OutputTail } from '../main/output-tail.js';
+import { protonRootOf } from '../main/proton-layout.js';
+import { registerNexusTool } from '../main/steam-tool.js';
 import { closeGracefully, keepSteamFocus, type Closable } from './graceful.js';
 import { AdoptedGame, adoptService, SessionStateFile, type SessionRecord } from './recovery.js';
 
@@ -120,6 +122,12 @@ export class GameController {
     await this.backend.refresh();
     this.lastBackendRefresh = Date.now();
     await this.runtime.refresh();
+    // Keep the "Xodus Nexus" entry in Steam's Compatibility dropdown on the current runtime.
+    if (this.runtime.current.winePath) {
+      await registerNexusTool(os.homedir(), protonRootOf(this.runtime.current.winePath))
+        .then(changed => { if (changed.length) this.options.log(`Registered the Xodus Nexus compatibility tool in ${changed.join(', ')}; Steam lists it after a restart.`); })
+        .catch(error => this.options.log(`Could not register the Xodus Nexus compatibility tool: ${(error as Error).message}`));
+    }
     this.connectivity.start();
     await this.recover();
     this.maintenance = setInterval(() => void this.maintain(), 60_000);
