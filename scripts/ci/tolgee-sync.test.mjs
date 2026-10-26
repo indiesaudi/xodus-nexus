@@ -49,7 +49,8 @@ test('only main can upload, no PR secrets, write permissions, package build or r
   assert.ok(workflow.on.push.paths.includes('assets/locales/en.json'));
   assert.deepEqual(workflow.permissions, { contents: 'read' });
   assert.equal(workflow.concurrency['cancel-in-progress'], false);
-  assert.equal(workflow.jobs.source.if, "github.ref == 'refs/heads/main'");
+  // This fork never uploads to upstream's Tolgee project.
+  assert.equal(workflow.jobs.source.if, "github.ref == 'refs/heads/main' && github.repository == 'domsvoboda/xodus-nexus'");
   const steps = workflow.jobs.source.steps;
   assert.deepEqual(steps[0].with, { ref: 'main', 'persist-credentials': false });
   assert.equal(steps.find(step => step.run?.includes('npm ci')).run, 'npm ci --ignore-scripts');
