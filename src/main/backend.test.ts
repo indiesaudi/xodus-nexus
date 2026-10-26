@@ -26,7 +26,7 @@ vi.mock('./process.js', async importOriginal => {
 });
 const sha = (data: Buffer, algorithm = 'sha256') => createHash(algorithm).update(data).digest('hex');
 const tag = `backend-v${backendLock.version}`;
-const url = (name: string) => `https://github.com/indiesaudi/xodus-nexus/releases/download/${tag}/${name}`;
+const url = (name: string) => `https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/releases/download/${tag}/${name}`;
 const elf = () => { const bytes = Buffer.alloc(64); bytes.set([0x7f, 0x45, 0x4c, 0x46, 2, 1]); bytes.writeUInt16LE(ELF_MACHINE[currentArch()], 18); return bytes; };
 
 describe('prebuilt backend', () => {
@@ -151,12 +151,12 @@ describe('prebuilt backend', () => {
     const manifest = { schema: 1, authUi: 'electron', version: '9.9.9', commit: 'a'.repeat(40), recipeSha256: 'b'.repeat(64), compatibility: 'linux-run-fixture',
       platform: 'linux', arch: currentArch(), archive: name('9.9.9', '.tar.xz'), archiveSha512: 'c'.repeat(128),
       files: { 'xodus-cli': 'd'.repeat(64), 'xodus-service': 'e'.repeat(64), LICENSE: 'f'.repeat(64) } };
-    const newestUrl = (asset: string) => `https://github.com/indiesaudi/xodus-nexus/releases/download/${newest}/${asset}`;
+    const newestUrl = (asset: string) => `https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/releases/download/${newest}/${asset}`;
     const fetcher = (async (input: URL | RequestInfo) => {
       const target = String(input);
       if (target.includes('/releases?')) return new Response(JSON.stringify([
         { tag_name: 'v9.9.9', assets: [] },
-        { tag_name: `backend-v${backendLock.version}`, assets: [{ name: name(backendLock.version, '.tar.xz'), browser_download_url: 'https://github.com/indiesaudi/xodus-nexus/releases/download/ignored/x' }] },
+        { tag_name: `backend-v${backendLock.version}`, assets: [{ name: name(backendLock.version, '.tar.xz'), browser_download_url: 'https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/releases/download/ignored/x' }] },
         { tag_name: 'backend-v0.1.0', assets: [] },
         { tag_name: newest, assets: ['.tar.xz', '.manifest.json', '.sha512sum', '-source.tar.xz', '-source.sha512sum']
           .map(suffix => ({ name: name('9.9.9', suffix), browser_download_url: newestUrl(name('9.9.9', suffix)) })) },

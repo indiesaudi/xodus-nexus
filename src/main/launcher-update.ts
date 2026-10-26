@@ -5,7 +5,7 @@ import type { LauncherUpdate } from '../shared/types.js';
 import { isNewerVersion } from '../shared/utils.js';
 import { APPIMAGE_ARCH_SUFFIX, currentArch, isLinuxElf64 } from './arch.js';
 
-const REPO = 'indiesaudi/xodus-nexus';
+const REPO = 'indiesaudi/xodus-nexus-x86-arm64-offline-support';
 const API = `https://api.github.com/repos/${REPO}/releases?per_page=100`;
 interface Asset { name: string; browser_download_url: string; size: number }
 interface Release { tag_name: string; draft?: boolean; prerelease?: boolean; assets: Asset[] }

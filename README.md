@@ -6,7 +6,7 @@
 
 Your Microsoft Store PC games on any x86_64 or arm64 Linux device, online and offline.
 
-[![CI](https://github.com/indiesaudi/xodus-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/indiesaudi/xodus-nexus/actions/workflows/ci.yml)
+[![CI](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/actions/workflows/ci.yml/badge.svg)](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
@@ -23,7 +23,7 @@ Your Microsoft Store PC games on any x86_64 or arm64 Linux device, online and of
 > [!CAUTION]
 > **Xodus Nexus is an independent, unofficial project built on Xodus. It is not an official project or release from the upstream Xodus developers.**
 >
-> Please report issues with this fork in [its own issue tracker](https://github.com/indiesaudi/xodus-nexus/issues), not in the Xodus Nexus or upstream Xodus trackers.
+> Please report issues with this fork in [its own issue tracker](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/issues), not in the Xodus Nexus or upstream Xodus trackers.
 >
 > Nexus includes its own changes, so a problem in Nexus does not necessarily indicate a problem in upstream Xodus.
 
@@ -44,7 +44,7 @@ Works on x86_64 and arm64 Linux PCs and handhelds. On a handheld, do the first s
 1. Open a terminal (Konsole) and run:
 
    ```sh
-   curl -fsSL https://raw.githubusercontent.com/indiesaudi/xodus-nexus/main/scripts/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/main/scripts/install.sh | bash
    ```
 
    The installer picks the build for your CPU. On read-only systems such as SteamOS or ArmadaOS the system-package step only prints a warning; the AppImage brings what it needs.
@@ -63,12 +63,12 @@ Sign out removes the stored licenses and the saved identity.
 
 ## Manual install (AppImage)
 
-Download the latest Linux AppImage for your CPU (`x86_64` or `arm64`) from [Releases](https://github.com/indiesaudi/xodus-nexus/releases), make it executable and open it. On arm64 the launcher, the Nexus backend and the Nexus runtime are native arm64 builds; the launcher picks the matching backend and runtime for your CPU.
+Download the latest Linux AppImage for your CPU (`x86_64` or `arm64`) from [Releases](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/releases), make it executable and open it. On arm64 the launcher, the Nexus backend and the Nexus runtime are native arm64 builds; the launcher picks the matching backend and runtime for your CPU.
 
 For an application-menu installation on supported distributions:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/indiesaudi/xodus-nexus/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/main/scripts/install.sh | bash
 ```
 
 In **Settings**, install the **Nexus backend** and **Nexus runtime**, then sign in
@@ -107,7 +107,7 @@ Flatpak version available through Discover. Other browsers are not supported.
 - If setup or the password dialog does not work in Game Mode, try it in Desktop Mode first. If the problem persists, include the backend diagnostic log in your issue report.
 
 [Documentation](https://github.com/domsvoboda/xodus-nexus/wiki) ·
-[Report an issue](https://github.com/indiesaudi/xodus-nexus/issues)
+[Report an issue](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/issues)
 
 ## How it works
 

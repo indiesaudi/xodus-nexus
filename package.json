@@ -1,6 +1,6 @@
 {
   "name": "xodus-nexus",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "description": "Xbox-inspired Microsoft Store game launcher for x86_64 and arm64 Linux, with offline play",
   "license": "MIT",
   "author": "Xodus Nexus contributors",
