@@ -2,7 +2,7 @@
 # Xodus Nexus user installer.
 #
 # One-liner (once the repository is public):
-#   curl -fsSL https://raw.githubusercontent.com/domsvoboda/xodus-nexus/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/main/scripts/install.sh | bash
 #
 # What it does, without further input:
 #   1. Installs system prerequisites with your package manager (skip with
@@ -17,7 +17,7 @@
 #   XODUS_NEXUS_APPIMAGE=<file>   install a local AppImage instead of downloading
 set -euo pipefail
 
-REPO="domsvoboda/xodus-nexus"
+REPO="indiesaudi/xodus-nexus-x86-arm64-offline-support"
 PREFIX="${XODUS_NEXUS_PREFIX:-$HOME/.local}"
 APP_DIR="$PREFIX/opt/xodus-nexus"
 BIN_DIR="$PREFIX/bin"

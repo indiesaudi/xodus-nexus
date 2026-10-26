@@ -14,8 +14,8 @@ function image(marker: number): Buffer {
 function release(version = '0.2.3') {
   const name = `Xodus-Nexus-${version}-${APPIMAGE_ARCH_SUFFIX[currentArch()]}.AppImage`;
   return { tag_name: `v${version}`, assets: [
-    { name, size: 100, browser_download_url: `https://github.com/domsvoboda/xodus-nexus/releases/download/v${version}/${name}` },
-    { name: `${name}.sha512sum`, size: 200, browser_download_url: `https://github.com/domsvoboda/xodus-nexus/releases/download/v${version}/${name}.sha512sum` },
+    { name, size: 100, browser_download_url: `https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/releases/download/v${version}/${name}` },
+    { name: `${name}.sha512sum`, size: 200, browser_download_url: `https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/releases/download/v${version}/${name}.sha512sum` },
   ] };
 }
 async function fixture(bad = '') {

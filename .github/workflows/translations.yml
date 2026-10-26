@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   source:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.repository == 'domsvoboda/xodus-nexus'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

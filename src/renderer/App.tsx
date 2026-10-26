@@ -1016,7 +1016,7 @@ export function FirstRunWizard({ data, toast }: { data: AppSnapshot; toast: (val
         <CircleAlert aria-hidden="true" />
         <div><h2 id="wizard-disclaimer-title">{ui("ui.independent_unofficial_project_4197cf7")}</h2>
           <p>{ui("ui.xodus_nexus_is_built_on_xodus_but_it_is_551be13")}{' '}<strong>{ui("ui.not_an_official_xodus_project_d61df4f")}</strong>{' '}{ui("ui.and_is_not_developed_or_maintained_by_the_upstre_af143ff")}</p>
-          <p>{ui("ui.please_report_nexus_issues_only_in_the_c9de146")}{' '}<a href="https://github.com/domsvoboda/xodus-nexus/issues" target="_blank" rel="noopener noreferrer">{ui("ui.nexus_repository_068a220")}</a>{ui("ui.not_upstream_a_problem_in_nexus_may_not_exist_in_e123052")}</p>
+          <p>{ui("ui.please_report_nexus_issues_only_in_the_c9de146")}{' '}<a href="https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/issues" target="_blank" rel="noopener noreferrer">{ui("ui.nexus_repository_068a220")}</a>{ui("ui.not_upstream_a_problem_in_nexus_may_not_exist_in_e123052")}</p>
         </div>
       </section>
       <p>{ui("ui.choose_where_games_install_everything_else_can_b_5cfa4a3")}</p>

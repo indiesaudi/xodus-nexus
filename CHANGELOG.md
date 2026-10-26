@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.1 (fork)
+
+- Upstream Xodus Nexus 0.4.0 with this fork's offline play, background service, any-Proton Steam support and native arm64 builds, as proposed upstream in #373, #360 and #374. Backend 0.2.17; the runtime is unchanged.
+- Releases, launcher updates and issue links point at this fork.
+
 - Play installed games offline on the account's designated offline device, as the Xbox app allows: a game launched once while online keeps Microsoft's offline lease, and the stored license is checked against that lease again at every offline launch. **Settings → Offline permissions** shows and changes the designation.
 - Remove stored offline licenses and offline sign-ins whenever offline play ends: turning it off, Microsoft reporting another device as the offline device, another account, sign-out, or a licensing refusal.
 - Add **Xodus Nexus** to Steam's Compatibility dropdown: the launcher and the background service register a `compatibilitytools.d/xodus-nexus` tool that always runs the current Nexus runtime (Steam lists it after a restart), and Add to Steam selects it for new game shortcuts unless the player already chose a tool. A Nexus shortcut on Xodus Nexus (or Default) runs on the Nexus runtime as before; players can pick any other Proton per game.
