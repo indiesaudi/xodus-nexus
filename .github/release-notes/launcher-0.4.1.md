@@ -12,6 +12,7 @@ This release brings the fork up to upstream Xodus Nexus 0.4.0, which adds interf
 ## Upgrade
 
 - **From 0.3.15:** in **Settings**, choose **Check for updates**, then **Update launcher**, and restart Nexus. Then choose **Update backend**; this release needs backend 0.2.17. The runtime does not change.
+  Update the launcher **first**. If the backend was updated first, games will not start until the launcher is updated too.
 - **From 0.3.14 or older:** these versions cannot update themselves after the repository rename. Run the installer again; games, sign-in and settings are kept:
 
   ```sh
