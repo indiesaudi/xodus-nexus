@@ -2,7 +2,7 @@
 
 <img src="assets/icon.png" width="96" alt="Xodus Nexus" />
 
-# Xodus Nexus for x86_64 and arm64 Linux
+# Xodus Nexus for x86_64 and arm64 Linux with offline support
 
 Your Microsoft Store PC games on any x86_64 or arm64 Linux device, online and offline.
 
