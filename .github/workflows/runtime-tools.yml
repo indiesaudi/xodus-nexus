@@ -2,7 +2,7 @@ name: Nexus runtime tools
 
 # Checks the small Linux helpers the Nexus daemon runs next to the game
 # (scripts/runtime-tools/*.c): source policy tests plus an x86_64 build smoke
-# tested under Xvfb. The shipped x86_64 and aarch64 binaries are built by
+# tested under Xvfb. The shipped x86_64 binary is built by
 # ci.yml and packaged into the launcher.
 
 on:

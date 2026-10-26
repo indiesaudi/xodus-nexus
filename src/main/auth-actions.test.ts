@@ -13,6 +13,7 @@ function fixture(code = 0) {
   const context = createContext({
     ensureIdle: vi.fn(), requireBackend: vi.fn(() => '/synthetic/backend'), randomUUID: () => 'synthetic',
     accountRefresh: { invalidate: vi.fn() }, accountLibrary: { reset: vi.fn() },
+    xboxSocial: { close: vi.fn() },
     gameActivities: { select: vi.fn() }, gameAchievements: { select: vi.fn() },
     authState: { running: false, stored: true }, emitSnapshot: vi.fn(),
     backend: { current: { capabilities: { externalAuth: true } } },
@@ -21,7 +22,7 @@ function fixture(code = 0) {
     shutdownStarted: false, accountProfile: { select: vi.fn(async () => {}) },
     startAuthTransport: vi.fn(() => tracked), spawnTracked: vi.fn(() => tracked),
     emitLog: vi.fn(), operations: new Map(), refreshAccount: vi.fn(async () => {}), authJob: undefined,
-    removeOfflineLicenses: vi.fn(async () => {}),
+    revokeOffline: vi.fn(async () => {}),
   });
   runInContext(actions, context);
   return context;
@@ -36,11 +37,12 @@ describe('explicit account actions', () => {
     expect(context.startAuthTransport).not.toHaveBeenCalled();
     expect(context.prepareSystemWallet).not.toHaveBeenCalled();
     expect(context.accountLibrary.reset).toHaveBeenCalledOnce();
+    expect(context.xboxSocial.close).toHaveBeenCalledOnce();
     expect(context.gameActivities.select).toHaveBeenCalledOnce();
     expect(context.gameAchievements.select).toHaveBeenCalledOnce();
     expect(context.refreshAccount).toHaveBeenCalledWith(false, true);
-    expect(context.removeOfflineLicenses).toHaveBeenCalledOnce();
-    expect(context.removeOfflineLicenses.mock.invocationCallOrder[0]).toBeLessThan(context.refreshAccount.mock.invocationCallOrder[0]);
+    expect(context.revokeOffline).toHaveBeenCalledOnce(); expect(context.revokeOffline).toHaveBeenCalledWith('sign-out');
+    expect(context.revokeOffline.mock.invocationCallOrder[0]).toBeLessThan(context.refreshAccount.mock.invocationCallOrder[0]);
     expect(context.authState).toMatchObject({ running: false, lastAction: 'logout', lastResult: 'success' });
     expect(context.operations.size).toBe(0);
     expect(context.authJob).toBeUndefined();
@@ -52,7 +54,7 @@ describe('explicit account actions', () => {
     expect(context.spawnTracked).toHaveBeenCalledWith('/synthetic/backend', ['logout', '--device'], expect.any(Object));
     expect(context.refreshAccount).not.toHaveBeenCalled();
     // A failed device reset still drops offline licenses: the user asked to sign out.
-    expect(context.removeOfflineLicenses).toHaveBeenCalledOnce();
+    expect(context.revokeOffline).toHaveBeenCalledOnce(); expect(context.revokeOffline).toHaveBeenCalledWith('sign-out');
     expect(context.authState).toMatchObject({ running: false, lastResult: 'failed' });
     expect(context.operations.size).toBe(0);
     expect(context.authJob).toBeUndefined();
@@ -62,9 +64,10 @@ describe('explicit account actions', () => {
     await runInContext("requestAuth('login')", context);
     expect(context.prepareSystemWallet).toHaveBeenCalledOnce();
     expect(context.startAuthTransport).toHaveBeenCalledOnce();
+    expect(context.xboxSocial.close).toHaveBeenCalledOnce();
     expect(context.startAuthTransport).toHaveBeenCalledWith('/synthetic/backend', expect.any(Object));
     expect(context.spawnTracked).not.toHaveBeenCalled();
-    expect(context.removeOfflineLicenses).not.toHaveBeenCalled();
+    expect(context.revokeOffline).not.toHaveBeenCalled();
     expect(context.authState).toMatchObject({ running: false, lastAction: 'login', lastResult: 'success' });
   });
   it('rejects sign-out while another operation requires credentials', async () => {
@@ -73,6 +76,7 @@ describe('explicit account actions', () => {
     await expect(runInContext("requestAuth('logout')", context)).rejects.toThrow('A game is running');
     expect(context.spawnTracked).not.toHaveBeenCalled();
     expect(context.accountLibrary.reset).not.toHaveBeenCalled();
+    expect(context.xboxSocial.close).not.toHaveBeenCalled();
     expect(context.authJob).toBeUndefined();
   });
   it('does not spawn logout if the launcher starts closing while account caches clear', async () => {

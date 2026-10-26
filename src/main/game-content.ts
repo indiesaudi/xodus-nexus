@@ -1,8 +1,9 @@
 import { constants, promises as fs } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import type { Game, GameContentItem, GameContentPlan } from '../shared/types.js';
+import type { Game, GameContentItem, GameContentPlan, LibraryAccess } from '../shared/types.js';
 import { children, parsePackageXml, single, type XmlNode } from './package-xml.js';
+import { ContentCatalog, contentSkus, desktopContentPackages } from './content-catalog.js';
 
 const productId = /^[A-Z0-9]{12}$/;
 const contentId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
@@ -12,7 +13,7 @@ interface Manifest {
   related: string[]; allowed: string[]; dependency?: string;
 }
 export interface ContentPackage { productId: string; contentId: string; family: string; downloadBytes?: number }
-type Access = Record<string, 'owned' | 'gamepass'>;
+type Access = Record<string, LibraryAccess>;
 type RecordValue = Record<string, any>;
 
 async function boundedFile(file: string): Promise<string> {
@@ -57,14 +58,18 @@ async function baseManifest(game: Game): Promise<Manifest> {
   if (base.storeId !== game.storeId) throw Error('The installed game Store ID changed. Reimport the game.');
   return base;
 }
-function packages(product: RecordValue): RecordValue[] {
-  return (Array.isArray(product.DisplaySkuAvailabilities) ? product.DisplaySkuAvailabilities : [])
-    .filter((row: RecordValue) => row?.Sku?.Properties?.IsTrial === false)
-    .flatMap((row: RecordValue) => Array.isArray(row.Sku.Properties.Packages) ? row.Sku.Properties.Packages : [])
-    .filter((pkg: RecordValue) => pkg && pkg.PackageFormat === 'MSIXVC' && Array.isArray(pkg.Architectures) && pkg.Architectures.includes('x64')
-      && Array.isArray(pkg.PlatformDependencies) && pkg.PlatformDependencies.some((dep: RecordValue) => dep?.PlatformName === 'Windows.Desktop'));
+function packageChoice(base: Manifest, baseProduct: RecordValue | undefined, product: RecordValue | undefined): ContentPackage | undefined {
+  const families = new Set(baseProduct ? desktopContentPackages(baseProduct).map(pkg => pkg.PackageFamilyName)
+    .filter(name => typeof name === 'string' && name.startsWith(base.name + '_')) : []);
+  const candidates = product && ['Durable', 'GameAddOn'].includes(product.ProductType) ? desktopContentPackages(product).filter(pkg => families.has(pkg.MainPackageFamilyNameForDlc)
+    && contentId.test(pkg.ContentId) && typeof pkg.PackageFamilyName === 'string' && /^[A-Za-z0-9._-]+$/.test(pkg.PackageFamilyName)) : [];
+  const unique = new Map(candidates.map(pkg => [pkg.ContentId.toLowerCase(), pkg]));
+  if (unique.size !== 1 || new Set(candidates.map(pkg => pkg.PackageFamilyName)).size !== 1) return;
+  const pkg = [...unique.values()][0];
+  const downloadBytes = Number.isSafeInteger(pkg.MaxDownloadSizeInBytes) && pkg.MaxDownloadSizeInBytes > 0 ? pkg.MaxDownloadSizeInBytes : undefined;
+  return { productId: product!.ProductId, contentId: pkg.ContentId.toLowerCase(), family: pkg.PackageFamilyName, downloadBytes };
 }
-export function contentOffers(base: Manifest, catalog: unknown, access: Access): { items: GameContentItem[]; packages: ContentPackage[] } {
+export function contentOffers(base: Manifest, catalog: unknown, access: Access, verify: string[] = []): { items: GameContentItem[]; packages: ContentPackage[] } {
   const products = (catalog as RecordValue)?.Products;
   if (!Array.isArray(products) || products.length > 256) throw Error('Invalid content catalog.');
   const byId = new Map<string, RecordValue>();
@@ -73,33 +78,49 @@ export function contentOffers(base: Manifest, catalog: unknown, access: Access):
     byId.set(product.ProductId, product);
   }
   const baseProduct = byId.get(base.storeId);
-  const families = new Set(baseProduct ? packages(baseProduct).map(pkg => pkg.PackageFamilyName).filter(name => typeof name === 'string' && name.startsWith(base.name + '_')) : []);
   const selected: ContentPackage[] = [];
   const items = base.related.filter(id => id !== base.storeId).map((id): GameContentItem => {
     const product = byId.get(id);
     const title = product?.LocalizedProperties?.find((row: RecordValue) => typeof row?.ProductTitle === 'string')?.ProductTitle?.slice(0, 300) || id;
     const licensed = access[id];
-    if (!licensed) return { productId: id, title, status: 'unlicensed', note: 'No active account license was verified.' };
-    const candidates = product?.ProductType === 'Durable' ? packages(product).filter(pkg => families.has(pkg.MainPackageFamilyNameForDlc)
-      && contentId.test(pkg.ContentId) && typeof pkg.PackageFamilyName === 'string' && /^[A-Za-z0-9._-]+$/.test(pkg.PackageFamilyName)) : [];
-    const unique = new Map(candidates.map(pkg => [pkg.ContentId.toLowerCase(), pkg]));
-    if (unique.size !== 1 || new Set(candidates.map(pkg => pkg.PackageFamilyName)).size !== 1) return { productId: id, title, access: licensed, status: 'unsupported', note: 'No unambiguous related PC MSIXVC content package was verified.' };
-    const pkg = [...unique.values()][0];
-    const downloadBytes = Number.isSafeInteger(pkg.MaxDownloadSizeInBytes) && pkg.MaxDownloadSizeInBytes > 0 ? pkg.MaxDownloadSizeInBytes : undefined;
-    selected.push({ productId: id, contentId: pkg.ContentId.toLowerCase(), family: pkg.PackageFamilyName, downloadBytes });
-    return { productId: id, title, access: licensed, status: 'available', downloadBytes, note: 'Install-time licensing is checked again by Xodus.' };
+    if (!licensed) {
+      const pkg = verify.includes(id) ? packageChoice(base, baseProduct, product) : undefined;
+      if (pkg) { selected.push(pkg); return { productId: id, title, status: 'verify', downloadBytes: pkg.downloadBytes,
+        note: 'Included in an active offer. Xodus must verify this add-on license before downloading.' }; }
+      return { productId: id, title, status: 'unlicensed', note: 'No active account license was verified.' };
+    }
+    const skus = contentSkus(product ?? {});
+    if (product?.ProductType === 'Durable' && skus.some(props => Array.isArray(props.BundledSkus) && props.BundledSkus.length))
+      return { productId: id, title, access: licensed, status: 'bundle', note: 'Content bundle. Its related add-ons are listed separately.' };
+    if (product?.ProductType === 'Durable' && skus.length && skus.every(props => (props.PackagesDeclared ?? Object.hasOwn(props, 'Packages'))
+      && (props.Packages === null || Array.isArray(props.Packages) && props.Packages.length === 0)))
+      return { productId: id, title, access: licensed, status: 'license-only', note: 'No download required. The game must verify this license through the runtime.' };
+    const pkg = packageChoice(base, baseProduct, product);
+    if (!pkg) return { productId: id, title, access: licensed, status: 'unsupported', note: 'No unambiguous related PC MSIXVC content package was verified.' };
+    selected.push(pkg);
+    return { productId: id, title, access: licensed, status: 'available', downloadBytes: pkg.downloadBytes, note: 'Install-time licensing is checked again by Xodus.' };
   });
   return { items, packages: selected };
 }
 
 export class GameContent {
-  constructor(private dataRoot: string, private fetcher: typeof fetch = fetch) {}
-  private directory(game: Game, id: string): string {
-    if (!productId.test(id)) throw Error('Invalid content product ID.');
-    const key = createHash('sha256').update(game.id + '\0' + path.resolve(game.path)).digest('hex').slice(0, 32);
-    return path.join(this.dataRoot, 'content', key, id);
+  private catalog: ContentCatalog;
+  constructor(private dataRoot: string, fetcher: typeof fetch = fetch) { this.catalog = new ContentCatalog(fetcher); }
+  /** Public discovery hints only. Never reads credentials or grants runtime rights. */
+  async relatedProducts(game: Game, access: Access, market = 'US', signal = AbortSignal.timeout(5_000)): Promise<string[]> {
+    const base = await baseManifest(game);
+    const catalog = await this.catalog.discover(base, access, market, game.offerProductId, signal);
+    signal.throwIfAborted();
+    const related = [...new Set([...catalog.related, ...await this.installedIds(game)])].filter(id => id !== base.storeId);
+    if (related.length > 256 || related.some(id => !productId.test(id))) throw Error('Content discovery scope is too large.');
+    return related;
   }
-  private async safeDirectory(game: Game, id: string, create = false): Promise<string> {
+  private directory(game: Game, id?: string): string {
+    if (id !== undefined && !productId.test(id)) throw Error('Invalid content product ID.');
+    const key = createHash('sha256').update(game.id + '\0' + path.resolve(game.path)).digest('hex').slice(0, 32);
+    return path.join(this.dataRoot, 'content', key, ...(id ? [id] : []));
+  }
+  private async safeDirectory(game: Game, id?: string, create = false): Promise<string> {
     const target = this.directory(game, id);
     // Managed content never writes into the base game. Reject symlink redirection
     // at every managed component, including persisted queue destinations.
@@ -116,7 +137,6 @@ export class GameContent {
   }
   private async validate(game: Game, id: string, directory: string, family?: string): Promise<Manifest> {
     const base = await baseManifest(game);
-    if (!base.related.includes(id)) throw Error('Content is not declared by this game.');
     const content = contentManifest(await manifestFile(directory, 'MicrosoftGame.config'));
     const appx = parsePackageXml(await manifestFile(directory, 'appxmanifest.xml'));
     const identity = single(appx, 'Identity').attributes;
@@ -161,42 +181,25 @@ export class GameContent {
   }
   async plan(game: Game, readAccess: () => Promise<{ checkedAt: string; accessByProductId: Access }>, market = 'US'): Promise<{ plan: GameContentPlan; packages: ContentPackage[] }> {
     const base = await baseManifest(game);
-    if (!base.related.length) return { plan: { gameId: game.id, checkedAt: new Date().toISOString(), items: [] }, packages: [] };
     const access = await readAccess();
-    const catalog: RecordValue = { Products: [] };
-    const ids = [...new Set([base.storeId, ...base.related])];
-    for (let offset = 0; offset < ids.length; offset += 20) {
-      const url = new URL('https://displaycatalog.mp.microsoft.com/v7.0/products');
-      url.search = new URLSearchParams({ bigIds: ids.slice(offset, offset + 20).join(','), market: /^[A-Z]{2}$/.test(market.toUpperCase()) ? market.toUpperCase() : 'US', languages: 'en-us,neutral' }).toString();
-      const response = await this.fetcher(url, { redirect: 'error', signal: AbortSignal.timeout(20_000) });
-      if (!response.ok) throw Error('Microsoft content metadata could not be loaded.');
-      if (!response.body) throw Error('Content metadata response is empty.');
-      const reader = response.body.getReader(), chunks: Uint8Array[] = [];
-      let size = 0;
-      try {
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          size += value.byteLength;
-          if (size > 8_000_000) throw Error('Content metadata response is too large.');
-          chunks.push(value);
-        }
-      } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
-      const text = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
-      const data = JSON.parse(text);
-      if (!Array.isArray(data.Products) || data.Products.length > 20 || data.Products.some((p: RecordValue) => !ids.slice(offset, offset + 20).includes(p?.ProductId))) throw Error('Unexpected content metadata.');
-      catalog.Products.push(...data.Products);
-    }
-    const offers = contentOffers(base, catalog, access.accessByProductId);
+    const catalog = await this.catalog.discover(base, access.accessByProductId, market, game.offerProductId);
+    const offers = contentOffers({ ...base, related: catalog.related }, catalog, access.accessByProductId, catalog.verify);
     const installed = new Set(await this.installedIds(game));
     for (const item of offers.items) if (installed.has(item.productId)) {
+      if (item.status === 'verify') { item.note = 'Installed files retained. Xodus must verify this add-on license before repair.'; continue; }
       item.status = 'installed'; item.note = item.access ? 'Installed. The runtime verifies the license when requested.' : 'Installed files retained, but no active account license was verified.';
     }
     return { plan: { gameId: game.id, checkedAt: access.checkedAt, items: offers.items }, packages: offers.packages };
   }
-  async prepare(game: Game, pkg: ContentPackage): Promise<string> {
+  async prepare(game: Game, pkg: ContentPackage, market = 'US'): Promise<string> {
     const base = await baseManifest(game);
-    if (!base.related.includes(pkg.productId) || !contentId.test(pkg.contentId)) throw Error('Invalid content installation.');
+    if (!productId.test(pkg.productId) || !contentId.test(pkg.contentId)) throw Error('Invalid content installation.');
+    const catalog = await this.catalog.discover(base, {}, market, pkg.productId);
+    const expected = catalog.related.includes(pkg.productId) ? packageChoice(base, catalog.Products.find(p => p.ProductId === base.storeId), catalog.Products.find(p => p.ProductId === pkg.productId)!) : undefined;
+    if (!expected || expected.contentId !== pkg.contentId || expected.family !== pkg.family) throw Error('Invalid content installation.');
+    const root = await fs.realpath(this.dataRoot), gameRoot = await fs.realpath(game.path);
+    const target = path.join(root, path.relative(this.dataRoot, this.directory(game, pkg.productId)));
+    if (target === gameRoot || target.startsWith(gameRoot + path.sep) || gameRoot.startsWith(target + path.sep)) throw Error('Content storage overlaps the base game. Choose a separate runtime storage folder.');
     const directory = await this.safeDirectory(game, pkg.productId, true);
     await fs.unlink(path.join(directory, markerName)).catch(error => { if (error.code !== 'ENOENT') throw error; });
     return directory;
@@ -210,7 +213,11 @@ export class GameContent {
   }
   private async installedIds(game: Game): Promise<string[]> {
     const base = await baseManifest(game), installed: string[] = [];
-    for (const id of base.related) {
+    let ids: string[];
+    try { ids = await fs.readdir(await this.safeDirectory(game)); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
+    if (ids.length > 256) throw Error('Too many managed content directories.');
+    for (const id of ids.filter(id => productId.test(id))) {
       try {
         const directory = await this.safeDirectory(game, id);
         const marker = JSON.parse(await boundedFile(path.join(directory, markerName)));

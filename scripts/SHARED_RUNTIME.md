@@ -58,10 +58,8 @@ stays in a managed directory outside the base game and is supplied through
 `XODUS_CONTENT_ROOTS` after config/Appx/dependency/layout presence checks. Partial
 downloads are not supplied. These checks do not claim full payload integrity or
 grant ownership; the runtime still verifies fresh signed Store proof. Installed
-files remain available for discovery offline. Base-game launch licensing can
-fall back to the device-bound offline cache described under *Offline launch
-licenses*; add-on licensing still needs online access. Installation is an
-explicit per-package user action, not an
+files remain available for discovery offline, but licensing currently needs
+online access. Installation is an explicit per-package user action, not an
 automatic download of every owned add-on. Only config-declared related packages
 are supported; catalog-only bundles without that relationship remain unsupported.
 PublisherContent and content mounting remain unsupported. A real-game test is
@@ -80,78 +78,7 @@ Package-license lost registrations retain the caller's queue and deliver expiry
 notifications on its Completion port. Unregister supports pending callbacks,
 waiting, and reentrant unregister/close. This is expiry notification only, not
 Microsoft's full account/network/concurrency revocation service. Offline license
-acquisition through this API, other acquisition variants and content mounting
-are not implemented.
-
-### Offline launch licenses
-
-Microsoft grants offline play only to the account's designated offline device
-(the Xbox app's **Offline permissions** setting, one PC per account, three
-changes per 365 days). For that device the content-license response carries,
-next to the Machine-bound key license, a *lease* whose `CustomPolicies` say
-`isOffline: true`, with an `expiresAt` 30 days out and a `pollAt` renewal
-point; other devices get a User-bound key without an offline lease.
-`xodus-cli offline-pc` reads that designation through the PC Game App Front
-Door (`pcgafd/config/offlinepc`, XSTS for relying party `http://mp.microsoft.com/`)
-and `--set true --confirm` claims it for the Nexus device.
-
-`xodus-cli run --license-cache <dir>` (backend 0.2.12, `xodus-offline-license.patch`)
-records the encrypted SPLicense block only when such an offline lease arrived,
-keyed by content ID and bound to the signed-in account's PUID, valid until the
-lease expiry and never more than 30 days after the last online check. The file
-holds only what Microsoft sent: its content keys stay wrapped by the device key
-that lives in the system keyring, so the cache alone decrypts nothing and a
-sign-out removes it. Every online launch renews the entry.
-
-The cache is consulted only when the license service is unreachable: transport
-failures, timeouts, HTTP 429 and 5xx. A refusal (HTTP 403 or a satisfaction
-failure) purges the entry, and sign-in or response problems (HTTP 401, malformed
-responses) fail exactly as before. Entries are private files (0600 in a 0700
-directory), validated on read and removed when expired or unreadable. Each
-outcome is reported as a `NEXUS_CONTENT_LICENSE_DIAGNOSTIC_V1 content-cache-*`
-line; the launcher maps the final stage to the shown error. The cache does not
-change add-on licensing, downloads or the runtime's package-license handles.
-
-### Offline sign-in identity
-
-`xgameruntime-offline-identity.patch`: a title's `XUserAddAsync` needs
-Microsoft for the endpoint tables, the RPS tickets, device authentication
-and SISU, so without a network it failed with the WinHTTP connect error and
-titles that wait for a signed-in user (Hollow Knight: Silksong among them)
-sat on a black screen. Windows keeps the last signed-in identity on the
-device for exactly this case. The runtime now does the same per prefix and
-account: after a complete network sign-in it stores the XUID, the gamertag
-variants, the age group and the two endpoint tables under
-`%LOCALAPPDATA%\Xodus Nexus\offline-identity\<account key>`, never a token,
-ticket or key. The account key is the opaque `XODUS_ACCOUNT_HASH` the
-launcher sets for every launch (a SHA-256 prefix of the signed-in account,
-`src/main/offline-identity.ts`); without it nothing is stored or read, one
-account never sees another's identity, and the launcher deletes every
-prefix's caches on sign-out together with the offline licenses.
-When every sign-in attempt fails with a connectivity error (name resolution,
-connect, timeout) the cached identity completes `XUserAddAsync`, token and
-signature requests fail with that same connect error, and
-`XNetworkingGetConnectivityHint` reports local access so titles skip online
-features. The cache expires after 30 days, the span of an offline content
-license, and is never consulted for any other failure. It does not grant
-content: the backend's offline license decides whether the game may start.
-`XODUS_FORCE_OFFLINE=1` makes the network sign-in fail as unreachable, for the
-`offline-identity` contract probe and diagnostics. Metadata feature:
-`xuser-offline-identity-v1`.
-
-`xgameruntime-offline-fast-fail.patch`: the fallback above used to arrive
-minutes late. Every runtime request retried three times on connect failures,
-each attempt ran into Wine's unbounded name resolution and 20-second connect
-default, and the sign-in thread then made a delayed second round, so a LAN
-without a route to the internet cost about two minutes before the cached
-identity was used. Requests now bound resolution and connect to 5 seconds
-each (`WinHttpSetTimeouts`, send/receive keep their defaults), stop retrying
-on name-resolution, connect, timeout and connection errors (server errors are
-still retried) and the sign-in falls back after the first unreachable
-attempt. The launcher sets `XODUS_FORCE_OFFLINE=1` for a launch it already
-found offline, which makes the cached sign-in immediate; the
-`offline-identity` probe checks that both forced-offline paths complete
-within two seconds.
+acquisition, other acquisition variants and content mounting are not implemented.
 
 ### Task-queue ownership
 

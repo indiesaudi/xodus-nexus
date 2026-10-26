@@ -31,13 +31,17 @@ function settle(result: { code: number | null; output: string; log: string[] }, 
   return status;
 }
 
+/** With a license cache the backend itself removes the stored offline
+ * licenses whenever Microsoft reports this device as not designated. */
+const cacheArgs = (licenseCache?: string) => licenseCache ? ['--license-cache', licenseCache] : [];
+
 /** Reads whether this device is the account's designated offline PC. */
-export async function readOfflinePermissions(run: Runner): Promise<OfflinePermissions> {
-  return settle(await run([]), false);
+export async function readOfflinePermissions(run: Runner, licenseCache?: string): Promise<OfflinePermissions> {
+  return settle(await run(cacheArgs(licenseCache)), false);
 }
 
 /** Changes the designation. The caller confirms with the user first; Microsoft
  * counts every change against a yearly limit. */
-export async function changeOfflinePermissions(run: Runner, enabled: boolean): Promise<OfflinePermissions> {
-  return settle(await run(['--set', enabled ? 'true' : 'false', '--confirm']), true);
+export async function changeOfflinePermissions(run: Runner, enabled: boolean, licenseCache?: string): Promise<OfflinePermissions> {
+  return settle(await run(['--set', enabled ? 'true' : 'false', '--confirm', ...cacheArgs(licenseCache)]), true);
 }

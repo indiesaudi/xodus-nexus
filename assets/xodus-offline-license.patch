@@ -1,5 +1,5 @@
 diff --git a/crates/xodus-cli/src/commands.rs b/crates/xodus-cli/src/commands.rs
-index 5a66715..727ca8a 100644
+index 1e0e96d..c2e9f7e 100644
 --- a/crates/xodus-cli/src/commands.rs
 +++ b/crates/xodus-cli/src/commands.rs
 @@ -5,6 +5,7 @@ pub mod extract_eappx;
@@ -8,8 +8,8 @@ index 5a66715..727ca8a 100644
  pub mod logout;
 +pub mod offline_pc;
  pub mod profile;
+ pub mod social;
  pub mod game_activity;
- pub mod achievements;
 diff --git a/crates/xodus-cli/src/commands/license.rs b/crates/xodus-cli/src/commands/license.rs
 index f0a820b..7bb7bdd 100644
 --- a/crates/xodus-cli/src/commands/license.rs
@@ -216,10 +216,10 @@ index 0000000..66a3591
 +    }
 +}
 diff --git a/crates/xodus-cli/src/commands/run.rs b/crates/xodus-cli/src/commands/run.rs
-index bb0b9e7..4214df5 100644
+index 1ec9cb9..e0335b7 100644
 --- a/crates/xodus-cli/src/commands/run.rs
 +++ b/crates/xodus-cli/src/commands/run.rs
-@@ -468,6 +468,7 @@ pub async fn run(
+@@ -535,6 +535,7 @@ pub async fn run(
      materialize_exe: bool,
      materialize_chain: bool,
      market: Option<String>,
@@ -227,7 +227,7 @@ index bb0b9e7..4214df5 100644
  ) -> ExitCode {
      let mut lfiles: HashMap<String, SegmentFile> = HashMap::new();
  
-@@ -505,11 +506,13 @@ pub async fn run(
+@@ -572,11 +573,13 @@ pub async fn run(
          lfiles.extend(sfiles);
      }
  
@@ -242,10 +242,10 @@ index bb0b9e7..4214df5 100644
      .await;
      if let Err(err) = license {
 diff --git a/crates/xodus-cli/src/commands/streaming.rs b/crates/xodus-cli/src/commands/streaming.rs
-index 06bff1e..1148424 100644
+index b528b14..0a11b6c 100644
 --- a/crates/xodus-cli/src/commands/streaming.rs
 +++ b/crates/xodus-cli/src/commands/streaming.rs
-@@ -424,6 +424,8 @@ where
+@@ -425,6 +425,8 @@ where
          tokens,
          remote_xvd.content_id().to_string(),
          market.unwrap_or("neutral".to_string()),
@@ -1118,7 +1118,7 @@ index 0000000..5bfeb0e
 +    );
 +}
 diff --git a/crates/xodus-cli/src/main.rs b/crates/xodus-cli/src/main.rs
-index c76096c..5eeb453 100644
+index ea6f6d9..4222e63 100644
 --- a/crates/xodus-cli/src/main.rs
 +++ b/crates/xodus-cli/src/main.rs
 @@ -8,6 +8,7 @@ use xodus::tokens::TokenManager;
@@ -1129,7 +1129,7 @@ index c76096c..5eeb453 100644
  mod package;
  mod package_plan;
  #[cfg(feature = "native-webview")]
-@@ -158,6 +159,8 @@ enum SubCommand {
+@@ -165,6 +166,8 @@ enum SubCommand {
          materialize_chain: bool,
          #[arg(short, long)]
          market: Option<String>,
@@ -1138,7 +1138,7 @@ index c76096c..5eeb453 100644
      },
      #[command(about = "Generate or decrypt base64-encoded CLEP challenge data")]
      Clep {
-@@ -168,6 +171,13 @@ enum SubCommand {
+@@ -175,6 +178,13 @@ enum SubCommand {
      SpLicense {
          block: String,
      },
@@ -1152,7 +1152,7 @@ index c76096c..5eeb453 100644
  }
  
  #[derive(Subcommand)]
-@@ -410,6 +420,7 @@ async fn main() -> ExitCode {
+@@ -422,6 +432,7 @@ async fn main() -> ExitCode {
              materialize_exe,
              materialize_chain,
              market,
@@ -1160,7 +1160,7 @@ index c76096c..5eeb453 100644
          } => {
              commands::run::run(
                  &client,
-@@ -420,6 +431,7 @@ async fn main() -> ExitCode {
+@@ -432,6 +443,7 @@ async fn main() -> ExitCode {
                  materialize_exe,
                  materialize_chain,
                  market,
@@ -1168,7 +1168,7 @@ index c76096c..5eeb453 100644
              )
              .await
          }
-@@ -431,6 +443,9 @@ async fn main() -> ExitCode {
+@@ -443,6 +455,9 @@ async fn main() -> ExitCode {
              ClepAction::Decrypt { data } => commands::clep::decrypt(data),
          },
          SubCommand::SpLicense { block } => commands::splicense::run(block),
@@ -1192,10 +1192,10 @@ index 47992b8..489075b 100644
  // we might need a bump in xal-rs concerning reqwest,
  // that might block us from using the correlationvector extension
 diff --git a/crates/xodus/src/licensing/content_response.rs b/crates/xodus/src/licensing/content_response.rs
-index 06a4545..73732b0 100644
+index 162b137..e87421d 100644
 --- a/crates/xodus/src/licensing/content_response.rs
 +++ b/crates/xodus/src/licensing/content_response.rs
-@@ -201,6 +201,55 @@ fn parse(bytes: &[u8]) -> Result<(LicenseContent, License), LicenseContentError>
+@@ -212,6 +212,55 @@ fn parse(bytes: &[u8]) -> Result<(LicenseContent, License), LicenseContentError>
      Ok((content, license))
  }
  

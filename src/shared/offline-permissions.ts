@@ -63,17 +63,20 @@ export function offlinePermissionFailure(log: string[]): string | undefined {
 }
 
 /** Remaining-changes sentence shown under the setting, mirroring the Xbox app. */
+/** Each variant is one fixed English sentence so the renderer can translate it. */
 export function offlinePermissionLimitText(status: OfflinePermissions, locale?: string): string {
-  const period = status.periodDays === 365 || status.periodDays === undefined ? 'year' : `${status.periodDays} days`;
+  const days = status.periodDays === 365 || status.periodDays === undefined ? undefined : status.periodDays;
   const when = status.nextChangeAt ? new Date(status.nextChangeAt).toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' }) : undefined;
   if (status.remainingToggles === undefined) {
-    return `Microsoft limits how often this setting can change${status.maxToggles ? ` (${status.maxToggles} times per ${period})` : ''}.`;
+    if (!status.maxToggles) return 'Microsoft limits how often this setting can change.';
+    return days ? `Microsoft allows ${status.maxToggles} changes of this setting every ${days} days.` : `Microsoft allows ${status.maxToggles} changes of this setting per year.`;
   }
   if (status.remainingToggles === 0) {
-    return when
-      ? `You have used all ${status.maxToggles ?? ''} changes for this ${period}. You can change this again on ${when}.`.replace('all  changes', 'all changes')
-      : `You have used all ${status.maxToggles ?? ''} changes for this ${period}.`.replace('all  changes', 'all changes');
+    const used = days ? `You have used every change for this ${days}-day period.` : 'You have used every change for this year.';
+    return when ? `${used} You can change this again on ${when}.` : used;
   }
-  const total = status.maxToggles ? ` of ${status.maxToggles}` : '';
-  return `You can change this ${status.remainingToggles}${total} more time${status.remainingToggles === 1 ? '' : 's'} this ${period}.`;
+  if (status.maxToggles) {
+    return days ? `Changes left in this ${days}-day period: ${status.remainingToggles} of ${status.maxToggles}.` : `Changes left this year: ${status.remainingToggles} of ${status.maxToggles}.`;
+  }
+  return days ? `Changes left in this ${days}-day period: ${status.remainingToggles}.` : `Changes left this year: ${status.remainingToggles}.`;
 }

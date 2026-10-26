@@ -32,11 +32,13 @@ describe('offline permission status', () => {
   });
   it('explains the yearly limit like the Xbox app', () => {
     const base = { enabled: true, requestSuccess: true, maxToggles: 3, periodDays: 365, checkedAt: '2026-10-24T22:00:00Z' };
-    expect(offlinePermissionLimitText({ ...base, remainingToggles: 2 }, 'en-US')).toBe('You can change this 2 of 3 more times this year.');
-    expect(offlinePermissionLimitText({ ...base, remainingToggles: 1 }, 'en-US')).toBe('You can change this 1 of 3 more time this year.');
-    expect(offlinePermissionLimitText({ ...base, remainingToggles: 0, nextChangeAt: '2027-03-01T10:00:00.000Z' }, 'en-US')).toBe('You have used all 3 changes for this year. You can change this again on March 1, 2027.');
-    expect(offlinePermissionLimitText({ ...base, remainingToggles: 0 }, 'en-US')).toBe('You have used all 3 changes for this year.');
-    expect(offlinePermissionLimitText({ ...base, remainingToggles: undefined }, 'en-US')).toBe('Microsoft limits how often this setting can change (3 times per year).');
-    expect(offlinePermissionLimitText({ ...base, periodDays: 30, remainingToggles: 1, maxToggles: undefined }, 'en-US')).toBe('You can change this 1 more time this 30 days.');
+    expect(offlinePermissionLimitText({ ...base, remainingToggles: 2 }, 'en-US')).toBe('Changes left this year: 2 of 3.');
+    expect(offlinePermissionLimitText({ ...base, remainingToggles: 1, maxToggles: undefined }, 'en-US')).toBe('Changes left this year: 1.');
+    expect(offlinePermissionLimitText({ ...base, remainingToggles: 0, nextChangeAt: '2027-03-01T10:00:00.000Z' }, 'en-US')).toBe('You have used every change for this year. You can change this again on March 1, 2027.');
+    expect(offlinePermissionLimitText({ ...base, remainingToggles: 0 }, 'en-US')).toBe('You have used every change for this year.');
+    expect(offlinePermissionLimitText({ ...base, remainingToggles: undefined }, 'en-US')).toBe('Microsoft allows 3 changes of this setting per year.');
+    expect(offlinePermissionLimitText({ ...base, remainingToggles: undefined, maxToggles: undefined }, 'en-US')).toBe('Microsoft limits how often this setting can change.');
+    expect(offlinePermissionLimitText({ ...base, periodDays: 30, remainingToggles: 1, maxToggles: undefined }, 'en-US')).toBe('Changes left in this 30-day period: 1.');
+    expect(offlinePermissionLimitText({ ...base, periodDays: 30, remainingToggles: 0 }, 'en-US')).toBe('You have used every change for this 30-day period.');
   });
 });

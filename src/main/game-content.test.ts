@@ -52,11 +52,27 @@ it('parses bounded XML with namespaces and encoded identity values, rejects malf
   expect(parsePackageXml('<Root><!-- comment --><ns:Child A="a &amp; b">&#x41;</ns:Child></Root>').children[0]).toMatchObject({ name: 'ns:Child', attributes: { A: 'a & b' }, text: 'A' });
   for (const xml of ['<!DOCTYPE Game [<!ENTITY x SYSTEM "file:///secret">]><Game/>', '<A><B></A>', '<A/><B/>', '<A X="1" X="2"/>', '<A>&unknown;</A>', '<A X="bad&"/>', '<A>' + '<B>'.repeat(40), '<A>\0</A>', '<A/>garbage']) expect(() => parsePackageXml(xml)).toThrow();
 });
+
+it('passes scoped public related IDs to the runtime without inventing account access',async()=>{
+  const f=await fixture();const before=await fs.readFile(path.join(f.base,'MicrosoftGame.Config'),'utf8');
+  const ids=await f.manager.relatedProducts(f.game,{},'CZ');
+  expect(ids.sort()).toEqual([OWN,GP,PAID].sort());
+  expect(await fs.readFile(path.join(f.base,'MicrosoftGame.Config'),'utf8')).toBe(before);
+  for(const [,options] of vi.mocked(f.fetcher).mock.calls)expect(options?.headers).toBeUndefined();
+  const controller=new AbortController();controller.abort();
+  await expect(f.manager.relatedProducts(f.game,{},'CZ',controller.signal)).rejects.toThrow();
+});
 it('does not infer licenses from catalog membership, a bundle title or disk', () => {
   const result = contentOffers(contentManifest(baseXml), catalog(), { [OWN]: 'owned', [GP]: 'gamepass' });
   expect(result.items.map(item => [item.productId, item.access, item.status])).toEqual([[OWN, 'owned', 'available'], [GP, 'gamepass', 'available'], [PAID, undefined, 'unlicensed']]);
   expect(result.packages.map(p => p.productId)).toEqual([OWN, GP]);
   expect(contentOffers(contentManifest(baseXml), catalog(), {}).packages).toHaveLength(0);
+});
+it('offers a real backend license check for a bundle child without manufacturing child ownership',()=>{
+  const result=contentOffers(contentManifest(baseXml),catalog(),{},[OWN]);
+  expect(result.items[0]).toMatchObject({productId:OWN,status:'verify'});expect(result.items[0].access).toBeUndefined();
+  expect(result.packages.map(pkg=>pkg.productId)).toEqual([OWN]);
+  expect(result.items[1].status).toBe('unlicensed');
 });
 it('rejects unsupported architectures, formats, trial SKUs, ambiguous packages and foreign base families', () => {
   for (const change of [{ PackageFormat: 'APPX' }, { Architectures: ['arm64'] }, { PlatformDependencies: [] }, { MainPackageFamilyNameForDlc: 'Other.Base_hash' }, { ContentId: 'https://evil.invalid/download' }]) {
@@ -89,10 +105,31 @@ it('rejects failed, oversized and unrelated catalog responses without granting i
     await expect(manager.plan(f.game, access)).rejects.toThrow();
   }
 });
-it('does no account or network work when no related content is declared', async () => {
+it('discovers owned matching content even when the optional manifest list is absent', async () => {
   const f = await fixture(); await fs.writeFile(path.join(f.base, 'MicrosoftGame.Config'), config());
-  const reader = vi.fn(access); expect((await f.manager.plan(f.game, reader)).plan.items).toHaveLength(0);
-  expect(reader).not.toHaveBeenCalled(); expect(f.fetcher).not.toHaveBeenCalled();
+  const reader = vi.fn(access); expect((await f.manager.plan(f.game, reader)).plan.items).toHaveLength(2);
+  expect(reader).toHaveBeenCalledOnce(); expect(f.fetcher).toHaveBeenCalledOnce();
+});
+it('keeps catalog-only completed DLC across launcher restarts without editing or declaring it in the base manifest', async () => {
+  const f=await fixture(); const original=config();await fs.writeFile(path.join(f.base,'MicrosoftGame.Config'),original);
+  const selected=(await f.manager.plan(f.game,access)).packages.find(pkg=>pkg.productId===OWN)!;
+  const directory=await f.manager.prepare(f.game,selected);
+  await fs.writeFile(path.join(directory,'MicrosoftGame.Config'),childXml());await fs.writeFile(path.join(directory,'appxmanifest.xml'),appxXml);
+  await fs.writeFile(path.join(directory,`layout_${GUID}.xml`),layoutXml);await fs.writeFile(path.join(directory,'logo.png'),'synthetic');
+  await f.manager.complete(f.game,selected);
+  const offline=new GameContent(f.data,async()=>{throw Error('No launch-time network');});
+  expect(await offline.roots(f.game)).toEqual([directory]);
+  expect(await fs.readFile(path.join(f.base,'MicrosoftGame.Config'),'utf8')).toBe(original);
+  await fs.writeFile(path.join(directory,'MicrosoftGame.Config'),childXml().replace(OWN,PAID));
+  expect(await offline.roots(f.game)).toEqual([]);
+});
+it('distinguishes license-only durables and content bundles from unsupported downloadable formats',()=>{
+  const data=catalog();data.Products[1].DisplaySkuAvailabilities[0].Sku.Properties.Packages=[];
+  expect(contentOffers(contentManifest(baseXml),data,{[OWN]:'other'}).items[0]).toMatchObject({status:'license-only',access:'other'});
+  Object.assign(data.Products[1].DisplaySkuAvailabilities[0].Sku.Properties,{BundledSkus:[{BigId:GP}]});
+  expect(contentOffers(contentManifest(baseXml),data,{[OWN]:'owned'}).items[0].status).toBe('bundle');
+  const consoleOnly=catalog();consoleOnly.Products[1].DisplaySkuAvailabilities[0].Sku.Properties.Packages[0].PlatformDependencies=[];
+  expect(contentOffers(contentManifest(baseXml),consoleOnly,{[OWN]:'owned'}).items[0].status).toBe('unsupported');
 });
 it('keeps partial content out of runtime roots, then registers only completed matching packages', async () => {
   const f = await installFixture();
@@ -127,4 +164,16 @@ it('does not retain completion after manifest or payload changes', async () => {
   const f = await installFixture(); await f.manager.complete(f.game, f.selected);
   await fs.writeFile(path.join(f.directory, 'appxmanifest.xml'), appxXml.replace('1.0.0.0', '2.0.0.0'));
   expect(await f.manager.roots(f.game)).toEqual([]);
+});
+
+it('rejects a forged Content ID, family, preorder-only SKU or storage inside the base game before creating content', async () => {
+  const f=await fixture(); const selected=(await f.manager.plan(f.game,access)).packages[0];
+  for(const change of [{contentId:'aaaaaaaa-89ab-cdef-0123-456789abcdef'},{family:'Foreign.Content_hash'}])
+    await expect(f.manager.prepare(f.game,{...selected,...change})).rejects.toThrow('Invalid content');
+  const rootInside=path.join(f.base,'data');await fs.mkdir(rootInside);
+  const manager=new GameContent(rootInside,f.fetcher);
+  await expect(manager.prepare(f.game,selected)).rejects.toThrow('overlaps');
+  expect(await fs.readdir(rootInside)).toEqual([]);
+  const data=catalog();Object.assign(data.Products[1].DisplaySkuAvailabilities[0].Sku.Properties,{IsPreOrder:true});
+  expect(contentOffers(contentManifest(baseXml),data,{[OWN]:'owned'}).packages).toEqual([]);
 });

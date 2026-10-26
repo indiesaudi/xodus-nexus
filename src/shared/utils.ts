@@ -35,7 +35,6 @@ export function parseBackendHelp(help: string): BackendCapabilities {
     streaming: commands.includes('streaming'),
     run: commands.includes('run'),
     offlinePc: commands.includes('offline-pc'),
-    licenseRefresh: commands.includes('license-refresh'),
     version,
   };
 }

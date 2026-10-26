@@ -1,16 +1,8 @@
-Fast offline launches
-
-Bound TCP connects of the CLI and service HTTP clients to 10 seconds, so an
-unreachable Microsoft is detected in seconds and the stored offline license
-takes over at once; skip the PlayFab authorisation attempt when the launch
-already runs on that stored license. No overall request timeout is added:
-the same client streams game data.
-
 diff --git a/crates/xodus-cli/src/commands/run.rs b/crates/xodus-cli/src/commands/run.rs
-index 4214df5..2f504de 100644
+index e0335b7..fcaf736 100644
 --- a/crates/xodus-cli/src/commands/run.rs
 +++ b/crates/xodus-cli/src/commands/run.rs
-@@ -657,11 +657,15 @@ pub async fn run(
+@@ -733,11 +733,15 @@ pub async fn run(
          .arg(&stub_path)
          .env("WINE_DLL_FILE_MAP", env_value)
          .env("WINE_EXE_FILE_MAP", exe_env_value);
@@ -64,10 +56,10 @@ index a9724ca..7715f77 100644
          // No cache directory, another account or no entry keep the original failure.
          for (cache_root, puid, content) in [
 diff --git a/crates/xodus-cli/src/main.rs b/crates/xodus-cli/src/main.rs
-index 5eeb453..1a2c53a 100644
+index 4222e63..1c86802 100644
 --- a/crates/xodus-cli/src/main.rs
 +++ b/crates/xodus-cli/src/main.rs
-@@ -235,9 +235,13 @@ async fn main() -> ExitCode {
+@@ -242,9 +242,13 @@ async fn main() -> ExitCode {
      {
          registry.init();
      }

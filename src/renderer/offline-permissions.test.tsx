@@ -21,11 +21,11 @@ it('shows the setting only when the backend supports it and the account is signe
 it('mirrors the Xbox app states: on, off, no changes left, loading and errors', () => {
   const render = (props: Parameters<typeof OfflinePermissionsView>[0]) => renderToStaticMarkup(<OfflinePermissionsView {...props} />);
   const on = render({ status: status(true, 1), busy: false, onToggle: () => {}, onRetry: () => {} });
-  expect(on).toContain('checked=""'); expect(on).toContain('This is your offline device'); expect(on).toContain('1 of 3 more time this year'); expect(on).toContain('>ON<');
+  expect(on).toContain('checked=""'); expect(on).toContain('This is your offline device'); expect(on).toContain('Changes left this year: 1 of 3.'); expect(on).toContain('>ON<');
   const off = render({ status: status(false, 2), busy: false, onToggle: () => {}, onRetry: () => {} });
-  expect(off).not.toContain('checked=""'); expect(off).toContain('Offline play is off'); expect(off).toContain('2 of 3 more times'); expect(off).toContain('>OFF<');
+  expect(off).not.toContain('checked=""'); expect(off).toContain('Offline play is off'); expect(off).toContain('Changes left this year: 2 of 3.'); expect(off).toContain('>OFF<');
   const exhaustedOff = render({ status: status(false, 0, '2027-03-01T10:00:00Z'), busy: false, onToggle: () => {}, onRetry: () => {} });
-  expect(exhaustedOff).toContain('used all 3 changes'); expect(exhaustedOff).toContain('change this again on'); expect(exhaustedOff).toMatch(/<input type="checkbox"[^>]*disabled=""/);
+  expect(exhaustedOff).toContain('used every change'); expect(exhaustedOff).toContain('change this again on'); expect(exhaustedOff).toMatch(/<input type="checkbox"[^>]*disabled=""/);
   // A designated device may still turn the setting off when no changes remain, like the Xbox app.
   const exhaustedOn = render({ status: status(true, 0), busy: false, onToggle: () => {}, onRetry: () => {} });
   expect(exhaustedOn).not.toMatch(/<input type="checkbox"[^>]*disabled=""/);
@@ -46,6 +46,7 @@ it('warns about the one-PC rule and the remaining yearly changes before any chan
   const disable = offlinePermissionConfirmation(status(true, 1), false);
   expect(disable.title).toBe('Turn off offline play on this device?');
   expect(disable.message).toContain('need a connection to start');
+  expect(disable.message).toContain('removed now');
   expect(disable.confirmLabel).toBe('Turn off');
   expect(offlinePermissionConfirmation({ ...status(false, 0), remainingToggles: undefined, maxToggles: undefined }, true).message).toContain('limits how often');
 });

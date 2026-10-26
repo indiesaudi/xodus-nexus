@@ -1,15 +1,3 @@
-Offline launches requested by the launcher
-
-`xodus-cli run --offline` (requires --license-cache): the launcher already
-found Microsoft unreachable, so the launch skips the device-credential
-renewal, the ticket and content-license requests and the PlayFab
-authorisation outright and starts on the stored offline license, which is
-held to the same rules as after a failed request. The Wine process gets
-XODUS_FORCE_OFFLINE=1 so the runtime signs in from its cached identity at
-once. A launch with a license cache but without the flag now survives a
-failed device-credential renewal (the device token expires while offline)
-and lets the content-license step decide instead of failing before it.
-
 diff --git a/crates/xodus-cli/src/commands/license.rs b/crates/xodus-cli/src/commands/license.rs
 index 7bb7bdd..4540549 100644
 --- a/crates/xodus-cli/src/commands/license.rs
@@ -24,10 +12,10 @@ index 7bb7bdd..4540549 100644
          eprintln!("{}", err);
          return ExitCode::FAILURE;
 diff --git a/crates/xodus-cli/src/commands/run.rs b/crates/xodus-cli/src/commands/run.rs
-index 2f504de..e3c46ac 100644
+index fcaf736..b25a7d2 100644
 --- a/crates/xodus-cli/src/commands/run.rs
 +++ b/crates/xodus-cli/src/commands/run.rs
-@@ -469,6 +469,7 @@ pub async fn run(
+@@ -536,6 +536,7 @@ pub async fn run(
      materialize_chain: bool,
      market: Option<String>,
      license_cache: Option<String>,
@@ -35,7 +23,7 @@ index 2f504de..e3c46ac 100644
  ) -> ExitCode {
      let mut lfiles: HashMap<String, SegmentFile> = HashMap::new();
  
-@@ -513,6 +514,7 @@ pub async fn run(
+@@ -580,6 +581,7 @@ pub async fn run(
          xvd.content_id().to_string(),
          market.unwrap_or("neutral".to_string()),
          license_cache.as_deref(),
@@ -43,7 +31,7 @@ index 2f504de..e3c46ac 100644
      )
      .await;
      if let Err(err) = license {
-@@ -657,7 +659,13 @@ pub async fn run(
+@@ -733,7 +735,13 @@ pub async fn run(
          .arg(&stub_path)
          .env("WINE_DLL_FILE_MAP", env_value)
          .env("WINE_EXE_FILE_MAP", exe_env_value);
@@ -59,10 +47,10 @@ index 2f504de..e3c46ac 100644
      } else {
          match playfab_auth_header(client, tokens).await {
 diff --git a/crates/xodus-cli/src/commands/streaming.rs b/crates/xodus-cli/src/commands/streaming.rs
-index 1148424..13e313b 100644
+index 0a11b6c..b5c8b3f 100644
 --- a/crates/xodus-cli/src/commands/streaming.rs
 +++ b/crates/xodus-cli/src/commands/streaming.rs
-@@ -426,6 +426,7 @@ where
+@@ -427,6 +427,7 @@ where
          market.unwrap_or("neutral".to_string()),
          // Downloads stay online-only; offline licenses are for launching installed games.
          None,
@@ -159,10 +147,10 @@ index 7715f77..d1b35ed 100644
      fn offline_recovery_purges_the_stored_license_when_microsoft_refuses() {
          let tokens = TokenManager::with_memory();
 diff --git a/crates/xodus-cli/src/main.rs b/crates/xodus-cli/src/main.rs
-index 1a2c53a..110a08c 100644
+index 1c86802..d668834 100644
 --- a/crates/xodus-cli/src/main.rs
 +++ b/crates/xodus-cli/src/main.rs
-@@ -161,6 +161,13 @@ enum SubCommand {
+@@ -168,6 +168,13 @@ enum SubCommand {
          market: Option<String>,
          #[arg(long = "license-cache", help = "Directory for device-bound offline licenses (--license-cache) used when Microsoft is unreachable")]
          license_cache: Option<String>,
@@ -176,7 +164,7 @@ index 1a2c53a..110a08c 100644
      },
      #[command(about = "Generate or decrypt base64-encoded CLEP challenge data")]
      Clep {
-@@ -303,10 +310,31 @@ async fn main() -> ExitCode {
+@@ -314,10 +321,31 @@ async fn main() -> ExitCode {
              | SubCommand::SpLicense { .. }
              | SubCommand::Logout { .. }
      );
@@ -211,7 +199,7 @@ index 1a2c53a..110a08c 100644
          }
      }
  
-@@ -425,6 +453,7 @@ async fn main() -> ExitCode {
+@@ -437,6 +465,7 @@ async fn main() -> ExitCode {
              materialize_chain,
              market,
              license_cache,
@@ -219,7 +207,7 @@ index 1a2c53a..110a08c 100644
          } => {
              commands::run::run(
                  &client,
-@@ -436,6 +465,7 @@ async fn main() -> ExitCode {
+@@ -448,6 +477,7 @@ async fn main() -> ExitCode {
                  materialize_chain,
                  market,
                  license_cache,

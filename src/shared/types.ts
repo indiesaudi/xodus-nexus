@@ -13,10 +13,10 @@ export interface BackendCapabilities {
   download: boolean;
   streaming: boolean;
   streamingProgressJson?: boolean;
-  /** `run --license-cache`: device-bound offline licenses when Microsoft is unreachable. */
+  /** `run --license-cache` and `offline-pc --license-cache`: device-bound offline
+   * licenses that the backend validates against their lease on every load and
+   * removes on every known revocation. Older caches are never handed a path. */
   licenseCache?: boolean;
-  /** `license-refresh`: renew the stored offline licenses while Microsoft is reachable. */
-  licenseRefresh?: boolean;
   /** `offline-pc`: show or change the account's designated offline PC. */
   offlinePc?: boolean;
   /** `run --offline`: skip Microsoft entirely and launch on the stored offline license. */
@@ -28,6 +28,7 @@ export interface BackendCapabilities {
   streamingControls?: boolean;
   streamingBandwidthLimit?: boolean;
   packageSelection?: boolean;
+  contentPackageSelection?: boolean;
   run: boolean;
   version?: string;
 }
@@ -108,6 +109,7 @@ export interface Game {
   title: string;
   path: string;
   storeId?: string;
+  offerProductId?: string; // Requested Store edition, not a license or replacement for the base identity.
   publisher?: string;
   installedVersion?: string;
   packageName?: string;
@@ -180,10 +182,12 @@ export interface GameOperation {
 }
 
 export interface Settings {
+  interfaceLanguage?: string;
   installRoot: string;
   market: string;
   parallelDownloads: number;
   downloadLimitMiB?: number;
+  shaderCacheLimitGiB?: number;
   winePath: string;
   externalXodusRoot: string;
   runtimeRoot: string;
@@ -250,6 +254,7 @@ export interface ConnectivityStatus {
 }
 
 export interface AppSnapshot {
+  social?: import('./game-invites.js').GameInviteState;
   backend: BackendStatus;
   runtime: RuntimeStatus;
   connectivity?: ConnectivityStatus;
@@ -292,6 +297,10 @@ export interface InstallChoice {
   packageFormat: string;
   kind: string;
   supported: boolean;
+  parentProductId?: string;
+  mainPackageFamilyName?: string;
+  downloadBytes?: number;
+  installBytes?: number;
 }
 
 export interface InstallPlan {
@@ -300,13 +309,14 @@ export interface InstallPlan {
   market: string;
   status: 'ready' | 'choice' | 'unavailable';
   choices: InstallChoice[];
+  availableBytes?: number;
 }
 
 export interface GameContentItem {
   productId: string;
   title: string;
-  access?: 'owned' | 'gamepass';
-  status: 'installed' | 'available' | 'unlicensed' | 'unsupported';
+  access?: LibraryAccess;
+  status: 'installed' | 'available' | 'verify' | 'unlicensed' | 'unsupported' | 'bundle' | 'license-only';
   downloadBytes?: number;
   note: string;
 }
@@ -385,16 +395,30 @@ export interface CatalogSearchResult {
   source: 'Microsoft Store';
 }
 
+export type LibraryAccess = 'owned' | 'gamepass' | 'other';
 export interface AccountLibraryPage {
-  kind: 'all' | 'owned' | 'gamepass';
-  products: (CatalogProduct & { access: 'owned' | 'gamepass' })[];
-  accessByProductId: Record<string, 'owned' | 'gamepass'>;
+  kind: 'all' | LibraryAccess;
+  sort?: 'recent-gamepass';
+  recentProductIds?: string[];
+  products: (CatalogProduct & { access: LibraryAccess })[];
+  accessByProductId: Record<string, LibraryAccess>;
+  unclassifiedEntitlements?: number;
+  excludedEntitlements?: number;
   cursor?: string;
   checkedAt: string;
   skippedEntitlements?: number;
 }
 
 export interface LauncherApi {
+  inviteXboxFriend(gameId:string,xuid:string):Promise<void>;
+  chooseGameInviteRecipient(id: string, xuid: string): Promise<void>;
+  cancelGameInvite(id: string): Promise<void>;
+  acceptGameInvite(id: string): Promise<void>;
+  onOpenFriends(callback: () => void): () => void;
+  getXboxFriends(): Promise<import('./social.js').XboxFriend[]>;
+  getXboxConversation(xuid: string): Promise<import('./social.js').XboxConversation>;
+  sendXboxMessage(xuid: string, text: string): Promise<import('./social.js').XboxMessageReceipt>;
+  closeXboxSocial(): Promise<void>;
   getSnapshot(): Promise<AppSnapshot>;
   refreshBackend(): Promise<BackendStatus>;
   checkBackendUpdate(): Promise<BackendStatus>;
@@ -428,9 +452,9 @@ export interface LauncherApi {
   setOfflinePermissions(enabled: boolean): Promise<OfflinePermissions>;
   searchCatalog(query: string, cursor?: string): Promise<CatalogSearchResult>;
   getFeaturedCatalog(): Promise<CatalogSearchResult>;
-  getAccountLibrary(kind: AccountLibraryPage['kind'], cursor?: string, refresh?: boolean): Promise<AccountLibraryPage>;
+  getAccountLibrary(kind: AccountLibraryPage['kind'], cursor?: string, refresh?: boolean, sort?: AccountLibraryPage['sort']): Promise<AccountLibraryPage>;
   startInstall(request: InstallRequest): Promise<string>;
-  getInstallPlan(productId: string): Promise<InstallPlan>;
+  getInstallPlan(productId: string, destination?: string): Promise<InstallPlan>;
   getGameContent(id: string): Promise<GameContentPlan>;
   installGameContent(id: string, productId: string): Promise<string>;
   updateInstalledGame(id: string): Promise<string>;

@@ -1,22 +1,8 @@
-Stage the PlayFab Game Saves adapter in a full launch view
-
-`run --materialize-all --view-dir <dir> --playfab-adapter <dll>` does in the
-launch view what the Nexus runtime's Wine launcher does for its own views, so
-a game run by another compatibility tool keeps the adapter: each
-PlayFabGameSave.dll in a real view directory that has the exact x64 SDK export
-contract the adapter forwards (the 40 exports in order, ordinal base 1) is
-kept as nexus_pgs_native.dll and the adapter takes its name, both written
-beside it and renamed over the entry, so a symlink to the game file is
-replaced, never followed. Directories the view symlinks to the installation
-are left alone, an unknown SDK stays unchanged, and an existing
-nexus_pgs_native.dll beside an unstaged SDK fails the launch. When anything
-was staged, playfabgamesave=n;nexus_pgs_native=n is added to WINEDLLOVERRIDES.
-
 diff --git a/crates/xodus-cli/src/commands/run.rs b/crates/xodus-cli/src/commands/run.rs
-index 972f74d..be110ca 100644
+index 346c282..1087766 100644
 --- a/crates/xodus-cli/src/commands/run.rs
 +++ b/crates/xodus-cli/src/commands/run.rs
-@@ -246,6 +246,174 @@ fn checked_view_directory(directory: &Path) -> std::io::Result<()> {
+@@ -321,6 +321,174 @@ fn checked_view_directory(directory: &Path) -> std::io::Result<()> {
      Ok(())
  }
  
@@ -191,7 +177,7 @@ index 972f74d..be110ca 100644
  // Copies one decrypted image as is. Unlike the launch stub writer it accepts
  // encrypted files that are not PE images, which a full view must also contain.
  fn copy_decrypted_image(path: &Path, fd: RawFd) -> std::io::Result<u64> {
-@@ -541,6 +709,7 @@ pub async fn run(
+@@ -619,6 +787,7 @@ pub async fn run(
      materialize_chain: bool,
      materialize_all: bool,
      view_dir: Option<String>,
@@ -199,7 +185,7 @@ index 972f74d..be110ca 100644
      market: Option<String>,
      license_cache: Option<String>,
      offline: bool,
-@@ -548,6 +717,13 @@ pub async fn run(
+@@ -626,6 +795,13 @@ pub async fn run(
      let mut lfiles: HashMap<String, SegmentFile> = HashMap::new();
      let materialize_chain = materialize_chain || materialize_all;
      let view_dir = view_dir.map(PathBuf::from);
@@ -213,7 +199,7 @@ index 972f74d..be110ca 100644
      if let Some(view_dir) = &view_dir {
          if let Err(err) = checked_view_directory(view_dir) {
              eprintln!("refusing the launch view directory {}: {}", view_dir.display(), err);
-@@ -739,6 +915,23 @@ pub async fn run(
+@@ -826,6 +1002,23 @@ pub async fn run(
  
      let mut command = Command::new(wine);
      command.arg(&stub_path);
@@ -237,7 +223,7 @@ index 972f74d..be110ca 100644
      if materialize_all {
          // Every image is a real file in the view: no file maps, and the
          // decrypted memfds are not inherited by Wine, Proton or the game.
-@@ -1058,6 +1251,87 @@ mod tests {
+@@ -1156,6 +1349,87 @@ mod tests {
          assert!(checked_view_directory(Path::new("relative/views")).is_err());
      }
  
@@ -326,10 +312,10 @@ index 972f74d..be110ca 100644
      fn launch_chain_rejects_parent_path_components() {
          assert!(checked_relative_path("..\\outside.exe").is_err());
 diff --git a/crates/xodus-cli/src/main.rs b/crates/xodus-cli/src/main.rs
-index af3ebee..2dce88f 100644
+index 3073368..d7e0763 100644
 --- a/crates/xodus-cli/src/main.rs
 +++ b/crates/xodus-cli/src/main.rs
-@@ -166,6 +166,12 @@ enum SubCommand {
+@@ -173,6 +173,12 @@ enum SubCommand {
          materialize_all: bool,
          #[arg(long = "view-dir", help = "Owner-only directory (mode 0700) that holds the --materialize-all launch view")]
          view_dir: Option<String>,
@@ -342,7 +328,7 @@ index af3ebee..2dce88f 100644
          #[arg(short, long)]
          market: Option<String>,
          #[arg(long = "license-cache", help = "Directory for device-bound offline licenses (--license-cache) used when Microsoft is unreachable")]
-@@ -467,6 +473,7 @@ async fn main() -> ExitCode {
+@@ -476,6 +482,7 @@ async fn main() -> ExitCode {
              materialize_chain,
              materialize_all,
              view_dir,
@@ -350,7 +336,7 @@ index af3ebee..2dce88f 100644
              market,
              license_cache,
              offline,
-@@ -481,6 +488,7 @@ async fn main() -> ExitCode {
+@@ -490,6 +497,7 @@ async fn main() -> ExitCode {
                  materialize_chain,
                  materialize_all,
                  view_dir,

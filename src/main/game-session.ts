@@ -6,40 +6,45 @@ import { prefixUserLocale, prepareProtonRunner, syncPrefixUserLocale, syncUnreal
 import { isNexusTool } from './steam-tool.js';
 import { applyPrefixSettings } from './wine-registry.js';
 import { accountCacheKey } from './offline-identity.js';
-import { cloudSaveRuntime, selectedWinePath, unbridgedCloudSaveRuntime } from './xodus-service.js';
+import { bindOfflineAccess, licenseCacheDirectory, type OfflineRevocation } from './offline-access.js';
+import { cloudSaveRuntime, gameInviteRuntime, selectedWinePath, storeDiscoveryRuntime, unbridgedCloudSaveRuntime } from './xodus-service.js';
 import { GameLogReducer, gameLoggingEnvironment, gameWindowEnvironment } from './game-log.js';
 import { installedVcRuntimeVersion, VC_REDIST_VERSION, versionAtLeast } from './vc-runtime.js';
 import { spawnGameProcess, type GameProcess } from './game-process.js';
-import { gameLocaleEnvironment, manifestLocales, manifestTitleId, supportedGameLocale } from './game-locale.js';
+import { gameLocaleEnvironment, installedGameLocales, installedGameTitleId, supportedGameLocale } from './game-locale.js';
 import { antiCheatEnvironment } from './anti-cheat.js';
 import { gameLaunchArguments, preparedGameWine } from './game-launch.js';
 import { prepareGameWrapper, type GameWrapper } from './game-wrapper.js';
 import { canonicalInstallPath, installPathsOverlap } from './install-queue.js';
 import { GameContent } from './game-content.js';
+import { contentLicenseFailure } from '../shared/content-license.js';
 import type { AcquiredService, ServiceSessions } from './service-sessions.js';
-import { refreshOfflineLicenses } from './license-refresh.js';
 import { protonRootOf } from './proton-layout.js';
 import { forwardedWrappers, launchViewDirectory, prepareSteamOverlay, steamCompatData, steamCompatMounts, steamProtonCommand, writeSteamLauncher, writeWrappedLauncher } from './steam-compat.js';
 import { profileIdOf } from '../shared/profile-id.js';
 
-/** Device-bound offline licenses written by `xodus-cli run --license-cache`. */
-export function licenseCacheDirectory(dataRoot: string): string { return path.join(dataRoot, 'license-cache'); }
+export { licenseCacheDirectory };
 
 export async function gameLocales(game: Game): Promise<string[]> {
-  const xml = await fs.readFile(path.join(game.path, 'MicrosoftGame.config'), 'utf8').catch(() => '');
-  return manifestLocales(xml);
+  return installedGameLocales(game.path);
 }
 
 export async function gameTitleId(game: Game): Promise<string | undefined> {
-  const xml = await fs.readFile(path.join(game.path, 'MicrosoftGame.config'), 'utf8').catch(() => '');
-  return manifestTitleId(xml);
+  return installedGameTitleId(game.path);
 }
 
 /** The state a launch reads; writes go through `persistGame`, so one process owns `state.json`. */
 export interface GameSessionStore {
   readonly games: Game[];
   readonly downloads: DownloadTask[];
-  readonly settings: { winePath: string; runtimeRoot: string; market: string; verboseLogs?: boolean };
+  readonly settings: { winePath: string; runtimeRoot: string; market: string; verboseLogs?: boolean; shaderCacheLimitGiB?: number };
+}
+
+/** A started game invitation bridge (`GameInviteBridge`), as the runtime reaches it. */
+export interface InviteBridgeHandle {
+  port: number;
+  key: string;
+  stop(): Promise<void>;
 }
 
 /**
@@ -71,6 +76,14 @@ export interface GameSessionDeps {
   onLog?(operationId: string, line: string): void;
   /** Route the game's output through a file next to its log, so it survives this host restarting (daemon). */
   outputToFile?: boolean;
+  /** Managed DLC/content for the data root; a new `GameContent` when absent. */
+  content?(dataRoot: string): GameContent;
+  /** Related Store products (DLC hints) for the runtime's discovery; absent where the account library is not loaded. */
+  relatedProducts?(game: Game, content: GameContent): Promise<string[]>;
+  /** Starts the game's invitation bridge; absent where there is no Friends UI to accept them. */
+  inviteBridge?(operationId: string, game: Game, titleId: string, log: (line: string) => void): Promise<InviteBridgeHandle>;
+  /** Stored offline data was removed before the launch, e.g. another account left it behind. */
+  onOfflineRevoked?(reason: OfflineRevocation): void;
 }
 
 export interface ActiveGame {
@@ -132,12 +145,12 @@ export class GameSession {
     await deps.persistGame?.(id, patch);
     const binary = deps.requireBackend('run');
     if (inspected.installState !== 'ready') throw new Error(inspected.installMessage ?? 'The installation is not ready for Xodus run.');
-    const locale = supportedGameLocale(game.locale ?? '', await gameLocales(game));
-    const titleId = await gameTitleId(game);
+    const locale = supportedGameLocale(game.locale ?? '');
+    const titleId = await gameTitleId(game).catch(() => undefined);
     const runtime = deps.runtime();
     const backend = deps.backend();
     const wine = selectedWinePath(store.settings.winePath, store.settings.runtimeRoot, runtime.winePath);
-    if (!wine) throw new Error('Select a Wine/Xodus Proton binary in Settings.');
+    if (!wine) throw new Error('Select a Wine / Proton binary in Settings.');
     try { await fs.access(wine, constants.X_OK); }
     catch { throw new Error(`The selected Wine runtime is unavailable: ${wine}. Select or reinstall Xodus Runtime in Settings.`); }
     const cloudRuntime = await cloudSaveRuntime(wine);
@@ -150,14 +163,16 @@ export class GameSession {
     // its cached identity, instead of each waiting for its own connect timeout.
     const reachability: ConnectivityStatus = deps.connectivity ? await deps.connectivity.check() : { state: 'unknown' };
     const offlineLaunch = reachability.state === 'offline';
+    const owner = deps.account();
+    if (owner.stored === true && owner.username && await bindOfflineAccess(dataRoot, owner.username)) deps.onOfflineRevoked?.('account-changed');
+    const licenseCache = backend.capabilities.licenseCache ? licenseCacheDirectory(dataRoot) : undefined;
     const selectedProton = steamProtonCommand(options.steamCommand);
     // The "Xodus Nexus" entry in Steam's dropdown is the Nexus runtime itself.
     const nexusTool = Boolean(selectedProton && await isNexusTool(selectedProton.protonRoot));
     const steamProton = nexusTool ? undefined : selectedProton;
     if (steamProton && !backend.capabilities.fullView) throw new Error("Steam's compatibility tool needs a newer Xodus backend. Update the backend in Settings, or clear the compatibility tool for this game in Steam.");
     const args = gameLaunchArguments(inspected, wine, store.settings.market, backend.linuxRunPatch,
-      backend.capabilities.licenseCache ? licenseCacheDirectory(dataRoot) : undefined,
-      offlineLaunch && Boolean(backend.capabilities.offlineLaunch));
+      licenseCache, offlineLaunch && Boolean(licenseCache && backend.capabilities.offlineLaunch));
     const operationId = `game-${id}`;
     const logDirectory = path.join(dataRoot, 'logs');
     const logPath = path.join(logDirectory, `${id}-latest.log`);
@@ -201,6 +216,7 @@ export class GameSession {
     writeLaunchLog(`Connectivity: ${reachability.state}${reachability.reason ? ` (${reachability.reason})` : ''}; offline launch: ${offlineLaunch ? 'yes' : 'no'}`);
     changed(true);
     let service: AcquiredService | undefined;
+    let inviteBridge: InviteBridgeHandle | undefined;
     let launchWrapper: GameWrapper | undefined;
     let releaseDisplay = () => {};
     try {
@@ -216,7 +232,7 @@ export class GameSession {
       const viewDirectory = steamProton ? await launchViewDirectory(baseEnvironment, profileIdOf(deps.paths.userData)) : undefined;
       const gameWine = steamProton ? await writeSteamLauncher(path.join(dataRoot, 'launch-wrappers', 'steam', game.id), steamProton) : wine;
       launchWrapper = await prepareGameWrapper(gameWine, game.launchTools, path.join(dataRoot, 'launch-wrappers'), baseEnvironment, game.path);
-      const protonRunner = steamProton ? undefined : await prepareProtonRunner(wine, compatibilityDataPath, steamRoot, launchWrapper.command);
+      const protonRunner = steamProton ? undefined : await prepareProtonRunner(wine, compatibilityDataPath, steamRoot, launchWrapper.command, store.settings.shaderCacheLimitGiB);
       const wineCommand = protonRunner?.command ?? wine;
       args[2] = preparedGameWine(protonRunner, launchWrapper.command);
       // The shortcut's launch wrappers (armada-game-launch, gamemoderun, …) run
@@ -247,22 +263,37 @@ export class GameSession {
       const environment = antiCheatEnvironment(gameLocaleEnvironment(gameWindowEnvironment(gameLoggingEnvironment(protonRunner || steamProton
         ? { ...baseEnvironment }
         : { ...baseEnvironment, WINEPREFIX: legacyPrefixRoot, WINEARCH: 'win64' }, verboseLogs)), locale));
+      // Never inherit another title's discovery list. Hints are scoped public
+      // metadata, not licenses, and cannot make an optional lookup block Play.
+      delete environment.NEXUS_RELATED_PRODUCT_IDS;
+      delete environment.NEXUS_INVITE_PORT;
+      delete environment.NEXUS_INVITE_KEY;
+      const content = deps.content?.(dataRoot) ?? new GameContent(dataRoot);
+      if (deps.relatedProducts && await storeDiscoveryRuntime(wine)) {
+        const related = await deps.relatedProducts(game, content).catch(() => {
+          addGameLog('Additional DLC discovery unavailable. Continuing with package-declared content.');
+          return [] as string[];
+        });
+        if (related.length) environment.NEXUS_RELATED_PRODUCT_IDS = related.join(',');
+      }
       if (overlay && viewDirectory) {
         Object.assign(environment, overlay.environment);
         environment.STEAM_COMPAT_MOUNTS = steamCompatMounts(baseEnvironment, [await canonicalInstallPath(game.path), viewDirectory]);
       }
-      const contentRoots = await new GameContent(dataRoot).roots(game).catch(error => {
+      const contentRoots = await content.roots(game).catch(error => {
         addGameLog(`Managed content discovery unavailable: ${(error as Error).message}`);
         return [] as string[];
       });
       if (contentRoots.length) environment.XODUS_CONTENT_ROOTS = [environment.XODUS_CONTENT_ROOTS, ...contentRoots.map(root => 'Z:' + root.replaceAll('/', '\\'))].filter(Boolean).join(';');
       if (offlineLaunch) {
-        // The runtime treats the network as unreachable at once and completes
-        // the Xbox sign-in from its cached identity (xuser-offline-identity-v1).
+        // The runtime treats the network as unreachable at once instead of
+        // waiting for its own connect timeouts. Whether it may sign in from its
+        // cached identity is the backend's decision, made only after the stored
+        // license passed its lease checks.
         environment.XODUS_FORCE_OFFLINE = '1';
-        addGameLog(`Microsoft is unreachable (${reachability.reason ?? 'no answer'}); launching offline with the stored license and the cached Xbox identity.`);
+        addGameLog(`Microsoft is unreachable (${reachability.reason ?? 'no answer'}); launching offline with the stored license.`);
       }
-      if (locale) addGameLog(`Selected package language: ${locale}.`);
+      if (locale) addGameLog(`Selected game language: ${locale}.`);
       if (steamPrefix) {
         // No Windows helper can run outside Steam's own launch here: the same
         // settings go straight into the prefix's registry files.
@@ -270,7 +301,7 @@ export class GameSession {
           gamingServices: baseEnvironment.NEXUS_GAMING_SERVICES_VERSION_OVERRIDE !== '0',
           resetLocale: Boolean(locale?.includes('-')) && await prefixUserLocale(steamPrefix) !== locale,
         }, addGameLog);
-      } else if (locale) await syncPrefixUserLocale(wineCommand, gamePrefix, locale, environment, addGameLog);
+      } else await syncPrefixUserLocale(wineCommand, gamePrefix, locale, environment, addGameLog);
       await syncUnrealCultureGameIni(gamePrefix, game.path, titleId, locale, addGameLog);
       if (cloudRuntime) {
         service = await deps.services.acquire(binary, deps.paths.userData, addGameLog);
@@ -279,6 +310,13 @@ export class GameSession {
         environment.XODUS_BRIDGE_KEY = service.bridgeKey;
         environment.XODUS_SAVE_SYNC = 'auto';
         addGameLog('Xbox cloud save preview is enabled. Saves may download from and upload to the account cloud.');
+      }
+      if (deps.inviteBridge && titleId && /^[a-f0-9]{1,8}$/i.test(titleId) && await gameInviteRuntime(wine)) {
+        try {
+          inviteBridge = await deps.inviteBridge(operationId, game, String(parseInt(titleId, 16)), addGameLog);
+          environment.NEXUS_INVITE_PORT = String(inviteBridge.port);
+          environment.NEXUS_INVITE_KEY = inviteBridge.key;
+        } catch { addGameLog('Optional game invitations are unavailable for this launch.'); }
       }
       // Names the account for the runtime's offline identity cache (an opaque key, never the username).
       const account = deps.account();
@@ -299,6 +337,7 @@ export class GameSession {
       changed(true);
       const wrapper = launchWrapper;
       const acquired = service;
+      const invites = inviteBridge;
       const finished = tracked.result.then((result) => {
         addGameLog(`The Xodus process exited with code ${result.code}.`);
         if (!owns()) return;
@@ -309,7 +348,8 @@ export class GameSession {
         } else {
           const detail = result.output.split('\n').map((line) => line.trim()).filter(Boolean).slice(-6).join(' | ');
           operation.status = 'failed';
-          operation.error = `Xodus run exited with code ${result.code}${detail ? `: ${detail.slice(0, 900)}` : '.'}`;
+          operation.error = contentLicenseFailure(result.output.split('\n'))
+            ?? `Xodus run exited with code ${result.code}${detail ? `: ${detail.slice(0, 900)}` : '.'}`;
           operation.phase = operation.error;
         }
       }).catch((error) => {
@@ -324,23 +364,20 @@ export class GameSession {
         if (this.forceTimer) { clearTimeout(this.forceTimer); this.forceTimer = undefined; }
         if (this.active?.operationId === operationId) this.active = undefined;
         try {
+          await invites?.stop().catch(() => undefined);
           if (acquired) await acquired.release().catch((error) => addGameLog(`Account service cleanup failed: ${(error as Error).message}`));
           await tracked.cleanup().catch((error) => console.error('Game service cleanup failed:', error));
           await wrapper?.cleanup().catch((error) => console.error('Game wrapper cleanup failed:', error));
           gameLog.flush();
           launchLog.end();
         } finally { changed(true); }
-        // After an online session, renew the other games' offline leases too
-        // (this launch already renewed its own); at most once a day.
-        if (!offlineLaunch && backend.capabilities.licenseCache && backend.capabilities.licenseRefresh) {
-          void refreshOfflineLicenses(binary, licenseCacheDirectory(dataRoot), (line) => console.log(line));
-        }
       });
       const active: ActiveGame = { operationId, gameId: id, operation, process: tracked, service, stopPrefix: protonRunner?.stopPrefix, outputFile, result: tracked.result, finished };
       this.active = active;
       return active;
     } catch (error) {
       releaseDisplay();
+      await inviteBridge?.stop().catch(() => undefined);
       await launchWrapper?.cleanup().catch(() => undefined);
       if (service) await service.release().catch(() => undefined);
       writeLaunchLog(`Preparation error: ${(error as Error).message}`);

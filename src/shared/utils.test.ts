@@ -14,8 +14,6 @@ describe('parseBackendHelp', () => {
     expect(parsed.commands).toContain('run');
     expect(parsed.offlinePc).toBe(false);
     expect(parseBackendHelp(['  offline-pc  Show or change the offline PC', '  run  Run', ''].join(String.fromCharCode(10))).offlinePc).toBe(true);
-    expect(parsed.licenseRefresh).toBe(false);
-    expect(parseBackendHelp(['  license          Get a license', '  license-refresh  Renew the stored offline licenses', ''].join(String.fromCharCode(10))).licenseRefresh).toBe(true);
   });
 });
 
@@ -70,6 +68,10 @@ describe('download failure summary', () => {
     const marker = 'NEXUS_CONTENT_LICENSE_DIAGNOSTIC_V1 content-http 403';
     expect(downloadFailure([marker, 'untrusted-provider-message'], 1)).toContain('purchased edition');
     expect(downloadFailure([marker, 'untrusted-provider-message'], 1)).not.toContain('untrusted-provider-message');
+    const deviceLimit = downloadFailure(['NEXUS_CONTENT_LICENSE_DIAGNOSTIC_V1 content-device-limit 200', 'untrusted-provider-message'], 1);
+    expect(deviceLimit).toContain('Microsoft Store device limit reached');
+    expect(deviceLimit).toContain('https://account.microsoft.com/devices/content');
+    expect(deviceLimit).not.toContain('untrusted-provider-message');
     expect(downloadFailure([marker, 'NEXUS_CONTENT_LICENSE_DIAGNOSTIC_V1 content-parsed 200', 'extraction failed'], 1)).toContain('extraction failed');
   });
   it('shows panic cause instead of Rust backtrace hint', () => {

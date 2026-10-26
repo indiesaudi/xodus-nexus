@@ -1,21 +1,5 @@
-Launch from a full private view for other compatibility tools
-
-`run --materialize-all --view-dir <dir>` writes every decrypted package
-file, not only the executables, into a temporary launch view inside an
-owner-only (0700) directory, so the game runs on any Wine or Proton with no
-WINE_DLL_FILE_MAP or WINE_EXE_FILE_MAP and none of the runtime's memfd
-loader patches. The view directory must be an absolute, non-symlinked
-directory of this user with mode 0700; there is no fallback next to the game
-or in /tmp. Executables keep the PE checks of the launch chain; other
-encrypted files are copied as is. The decrypted memfds are closed on exec, so
-Wine, Proton and the game do not inherit them, and no PlayFab token is passed
-in the environment of a full view. Without the flag nothing changes,
-except that every launch view directory, including the executable-only one
-next to the game, is now created with mode 0700 instead of the umask's
-(often 0755), so other users cannot read decrypted executables.
-
 diff --git a/crates/xodus-cli/src/commands/run.rs b/crates/xodus-cli/src/commands/run.rs
-index e3c46ac..972f74d 100644
+index 9f0ae28..346c282 100644
 --- a/crates/xodus-cli/src/commands/run.rs
 +++ b/crates/xodus-cli/src/commands/run.rs
 @@ -1,6 +1,6 @@
@@ -26,7 +10,7 @@ index e3c46ac..972f74d 100644
  use std::os::unix::process::ExitStatusExt;
  use std::path::{Path, PathBuf};
  use std::process::ExitCode;
-@@ -224,11 +224,61 @@ fn create_launch_chain_mirror(
+@@ -299,11 +299,61 @@ fn create_launch_chain_mirror(
      source_root: &Path,
      entry_suffix: &str,
      fds: &[(&String, RawFd)],
@@ -89,15 +73,11 @@ index e3c46ac..972f74d 100644
              decrypted.insert(checked_relative_path(name)?, *fd);
          }
      }
-@@ -250,11 +300,28 @@ fn create_launch_chain_mirror(
+@@ -325,7 +375,22 @@ fn create_launch_chain_mirror(
          }
      }
      let decrypted_files: HashSet<PathBuf> = decrypted.keys().cloned().collect();
--    let parent = source_root.parent().unwrap_or_else(|| Path::new("/tmp"));
--    let mirror = Builder::new()
--        .prefix(".xodus-chain-")
--        .tempdir_in(parent)
--        .or_else(|_| Builder::new().prefix("xodus-chain-").tempdir())?;
+-    let mirror = launch_view_directory(source_root, ".xodus-chain-")?;
 +    let mirror = match view_parent {
 +        Some(view_parent) => {
 +            checked_view_directory(view_parent)?;
@@ -109,13 +89,7 @@ index e3c46ac..972f74d 100644
 +                "a full launch view requires a private view directory",
 +            ));
 +        }
-+        None => {
-+            let parent = source_root.parent().unwrap_or_else(|| Path::new("/tmp"));
-+            Builder::new()
-+                .prefix(".xodus-chain-")
-+                .tempdir_in(parent)
-+                .or_else(|_| Builder::new().prefix("xodus-chain-").tempdir())?
-+        }
++        None => launch_view_directory(source_root, ".xodus-chain-")?,
 +    };
 +    // tempfile creates the directory with the umask's mode (often 0755); the
 +    // decrypted images inside must be readable by this user only.
@@ -123,7 +97,7 @@ index e3c46ac..972f74d 100644
      populate_launch_view(
          source_root,
          mirror.path(),
-@@ -264,7 +331,12 @@ fn create_launch_chain_mirror(
+@@ -335,7 +400,12 @@ fn create_launch_chain_mirror(
      )?;
      let mut bytes = 0;
      for (relative, fd) in &decrypted {
@@ -137,7 +111,7 @@ index e3c46ac..972f74d 100644
      }
      let executable_count = decrypted.len();
      let entry = mirror.path().join(entry_path);
-@@ -467,11 +539,21 @@ pub async fn run(
+@@ -547,11 +617,21 @@ pub async fn run(
      exe: Option<String>,
      materialize_exe: bool,
      materialize_chain: bool,
@@ -159,7 +133,7 @@ index e3c46ac..972f74d 100644
  
      let out: &Path = Path::new(&source);
      let out_absolute = std::fs::canonicalize(out).unwrap();
-@@ -587,11 +669,12 @@ pub async fn run(
+@@ -676,11 +756,12 @@ pub async fn run(
      let entry_suffix = entry_name.trim_start_matches('\\');
  
      let (launch_mirror, stub_path, mirror_nt_prefix) = if materialize_chain {
@@ -174,7 +148,7 @@ index e3c46ac..972f74d 100644
                      bytes,
                      mirror.path().display()
                  );
-@@ -655,17 +738,38 @@ pub async fn run(
+@@ -744,10 +825,27 @@ pub async fn run(
      }
  
      let mut command = Command::new(wine);
@@ -204,10 +178,11 @@ index e3c46ac..972f74d 100644
 +            .env("WINE_EXE_FILE_MAP", exe_env_value);
 +    }
      if offline {
-         // The runtime treats the network as unreachable at once and completes
-         // the Xbox sign-in from its cached identity instead of waiting for
-         // its own connect timeouts (xuser-offline-identity-v1).
-         command.env("XODUS_FORCE_OFFLINE", "1");
+         // The runtime treats the network as unreachable at once instead of
+         // waiting for its own connect timeouts.
+@@ -765,7 +863,11 @@ pub async fn run(
+     ) {
+         command.env("XODUS_OFFLINE_IDENTITY", mode);
      }
 -    if offline || crate::license::OFFLINE_LICENSE_USED.load(std::sync::atomic::Ordering::Relaxed) {
 +    if materialize_all {
@@ -218,7 +193,7 @@ index e3c46ac..972f74d 100644
          eprintln!("Microsoft is unreachable; skipping PlayFab authorisation (the runtime signs in with its cached identity)");
      } else {
          match playfab_auth_header(client, tokens).await {
-@@ -866,6 +970,7 @@ mod tests {
+@@ -966,6 +1068,7 @@ mod tests {
  
          let (mirror, entry, count, bytes) =
              create_launch_chain_mirror(&source, &launcher_name, &files).unwrap();
@@ -226,7 +201,7 @@ index e3c46ac..972f74d 100644
          assert_eq!(entry, mirror.path().join("Dungeons.exe"));
          assert_eq!(count, 2);
          assert_eq!(bytes, 2048);
-@@ -883,6 +988,76 @@ mod tests {
+@@ -983,6 +1086,76 @@ mod tests {
          assert_eq!(std::fs::read(nested.join("Shipping.exe")).unwrap(), b"encrypted child");
      }
  
@@ -304,10 +279,10 @@ index e3c46ac..972f74d 100644
      fn launch_chain_rejects_parent_path_components() {
          assert!(checked_relative_path("..\\outside.exe").is_err());
 diff --git a/crates/xodus-cli/src/main.rs b/crates/xodus-cli/src/main.rs
-index c2e3b57..af3ebee 100644
+index f2d643e..3073368 100644
 --- a/crates/xodus-cli/src/main.rs
 +++ b/crates/xodus-cli/src/main.rs
-@@ -157,6 +157,15 @@ enum SubCommand {
+@@ -164,6 +164,15 @@ enum SubCommand {
          materialize_exe: bool,
          #[arg(long, default_value_t = false)]
          materialize_chain: bool,
@@ -323,7 +298,7 @@ index c2e3b57..af3ebee 100644
          #[arg(short, long)]
          market: Option<String>,
          #[arg(long = "license-cache", help = "Directory for device-bound offline licenses (--license-cache) used when Microsoft is unreachable")]
-@@ -456,6 +465,8 @@ async fn main() -> ExitCode {
+@@ -465,6 +474,8 @@ async fn main() -> ExitCode {
              exe,
              materialize_exe,
              materialize_chain,
@@ -332,7 +307,7 @@ index c2e3b57..af3ebee 100644
              market,
              license_cache,
              offline,
-@@ -468,6 +479,8 @@ async fn main() -> ExitCode {
+@@ -477,6 +488,8 @@ async fn main() -> ExitCode {
                  exe,
                  materialize_exe,
                  materialize_chain,

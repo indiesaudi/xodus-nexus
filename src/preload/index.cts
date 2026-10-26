@@ -6,6 +6,19 @@ import type { Game, InstallRequest, LauncherApi, Settings } from '../shared/type
 // preload stays a thin passthrough. Store pages always use the live
 // Microsoft Store catalog. No real credentials, tokens or account data.
 const api: LauncherApi = {
+  inviteXboxFriend:(gameId,xuid)=>ipcRenderer.invoke('game-invite-friend',gameId,xuid),
+  chooseGameInviteRecipient: (id,xuid) => ipcRenderer.invoke('game-invite-choose',id,xuid),
+  cancelGameInvite: id => ipcRenderer.invoke('game-invite-cancel',id),
+  acceptGameInvite: id => ipcRenderer.invoke('game-invite-accept',id),
+  onOpenFriends: callback => {
+    const listener = () => callback();
+    ipcRenderer.on('open-friends', listener);
+    return () => ipcRenderer.removeListener('open-friends', listener);
+  },
+  getXboxFriends: () => ipcRenderer.invoke('xbox-friends'),
+  getXboxConversation: xuid => ipcRenderer.invoke('xbox-conversation', xuid),
+  sendXboxMessage: (xuid, text) => ipcRenderer.invoke('xbox-send-message', xuid, text),
+  closeXboxSocial: () => ipcRenderer.invoke('xbox-social-close'),
   getSnapshot: () => ipcRenderer.invoke('get-snapshot'),
   refreshBackend: () => ipcRenderer.invoke('backend-refresh'),
   checkBackendUpdate: () => ipcRenderer.invoke('backend-check-update'),
@@ -43,9 +56,9 @@ const api: LauncherApi = {
   setOfflinePermissions: (enabled: boolean) => ipcRenderer.invoke('set-offline-permissions', enabled),
   searchCatalog: (query: string, cursor?: string) => ipcRenderer.invoke('catalog-search', query, cursor),
   getFeaturedCatalog: () => ipcRenderer.invoke('catalog-featured'),
-  getAccountLibrary: (kind, cursor, refresh) => ipcRenderer.invoke('account-library', kind, cursor, refresh),
+  getAccountLibrary: (kind, cursor, refresh, sort) => ipcRenderer.invoke('account-library', kind, cursor, refresh, sort),
   startInstall: (request: InstallRequest) => ipcRenderer.invoke('start-install', request),
-  getInstallPlan: (productId: string) => ipcRenderer.invoke('install-plan', productId),
+  getInstallPlan: (productId: string, destination?: string) => ipcRenderer.invoke('install-plan', productId, destination),
   getGameContent: id => ipcRenderer.invoke('game-content', id),
   installGameContent: (id, productId) => ipcRenderer.invoke('install-game-content', id, productId),
   updateInstalledGame: (id: string) => ipcRenderer.invoke('update-installed-game', id),

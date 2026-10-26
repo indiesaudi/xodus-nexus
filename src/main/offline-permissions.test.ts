@@ -17,6 +17,13 @@ describe('offline permission backend calls', () => {
     await changeOfflinePermissions(run, false);
     expect(run).toHaveBeenLastCalledWith(['--set', 'false', '--confirm']);
   });
+  it('hands the license cache to the backend so it can revoke stored licenses itself', async () => {
+    const run = vi.fn(async (_args: string[]) => ({ code: 0, output: ok(false, 2), log: [] }));
+    await readOfflinePermissions(run, '/data/license-cache');
+    expect(run).toHaveBeenLastCalledWith(['--license-cache', '/data/license-cache']);
+    await changeOfflinePermissions(run, false, '/data/license-cache');
+    expect(run).toHaveBeenLastCalledWith(['--set', 'false', '--confirm', '--license-cache', '/data/license-cache']);
+  });
   it('reports declined changes, transport failures and refusals with fixed messages', async () => {
     const declined = vi.fn(async () => ({ code: 1, output: ok(false, 0, false), log: ['NEXUS_OFFLINE_PC_V1 ok 200', 'NEXUS_OFFLINE_PC_V1 declined 200'] }));
     await expect(changeOfflinePermissions(declined, true)).rejects.toThrow('did not apply');

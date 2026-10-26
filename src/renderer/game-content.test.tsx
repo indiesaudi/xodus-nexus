@@ -24,3 +24,12 @@ it('blocks downloads while busy or after a license expires, even if files remain
   const stale = { ...plan, items: [{ ...plan.items[1], access: undefined }] };
   expect(renderToStaticMarkup(<ContentList plan={stale} disabled={false} install={() => {}} />)).toContain('disabled=""');
 });
+
+it('shows package-free licenses and bundles without pretending that there are files to install',()=>{
+  const html=renderToStaticMarkup(<ContentList plan={{...plan,items:[
+    {productId:'ONE',title:'Bonus',access:'owned',status:'license-only',note:'The runtime must verify this license.'},
+    {productId:'TWO',title:'Pass',access:'other',status:'bundle',note:'Its add-ons are listed separately.'},
+  ]}} disabled={false} install={()=>{throw Error('must not install');}}/>);
+  expect(html).toContain('No download required');expect(html).toContain('Content bundle');expect(html).toContain('Other access');
+  expect(html).not.toContain('<button');expect(html).not.toContain('Unsupported package');
+});
