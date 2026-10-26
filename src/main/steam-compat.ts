@@ -34,6 +34,60 @@ export function steamProtonCommand(words: readonly string[] | undefined): SteamP
 }
 
 /**
+ * Steam's `%command%` is: launch wrappers the user or the OS put in front of it
+ * (`armada-game-launch`, `gamemoderun`, `VAR=value`), Steam's process tracking
+ * (`pw-audio-namespace --`, `reaper SteamLaunch AppId=… --`), then, with a
+ * compatibility tool, the runtime and tool (`…/_v2-entry-point … -- …/proton
+ * waitforexitandrun`), and last the shortcut's placeholder executable.
+ */
+export interface SteamCommandParts {
+  wrappers: string[];
+  tracking: string[];
+  /** The compatibility tool part, ending in `proton <verb>`; empty without one. */
+  tool: string[];
+}
+
+const TRACKING = new Set(['pw-audio-namespace', 'reaper', 'steam-launch-wrapper']);
+const isTool = (word: string) => /^(_v2-entry-point|entry-point|run-in-[a-z0-9]+)$/.test(path.basename(word)) ||
+  /\/SteamLinuxRuntime[^/]*\//.test(word) || path.basename(word) === 'proton';
+
+export function parseSteamCommand(words: readonly string[]): SteamCommandParts {
+  if (words.length > MAX_WORDS || words.some(word => !word || /[\0\r\n]/.test(word))) throw new Error('Invalid Steam launch command.');
+  const proton = steamProtonCommand(words);
+  const end = proton ? proton.prefix.length : words.length;
+  const steam = words.findIndex(word => TRACKING.has(path.basename(word)) || isTool(word));
+  if (steam < 0 || steam >= end) {
+    // No Steam words: a bare placeholder (or nothing) follows the wrappers.
+    return { wrappers: proton ? words.slice(0, end) : words.slice(0, Math.max(0, words.length - 1)), tracking: [], tool: [] };
+  }
+  const toolStart = words.findIndex((word, index) => index >= steam && index < end && isTool(word));
+  return {
+    wrappers: words.slice(0, steam),
+    tracking: words.slice(steam, toolStart < 0 ? (proton ? end : words.length - 1) : toolStart),
+    tool: toolStart < 0 ? [] : words.slice(toolStart, end),
+  };
+}
+
+/**
+ * What the thin client forwards to the daemon: the wrappers, then the tool part
+ * (Steam's tracking stays around the client, the placeholder is dropped).
+ */
+export function forwardedSteamCommand(parts: SteamCommandParts): string[] {
+  return [...parts.wrappers, ...parts.tool];
+}
+
+/** The wrappers of a forwarded command: everything before its tool part. */
+export function forwardedWrappers(words: readonly string[]): string[] {
+  const tool = words.findIndex(isTool);
+  return tool < 0 ? [...words] : words.slice(0, tool);
+}
+
+/** A wrapper list as an exec prefix: leading `VAR=value` words need `env`. */
+export function wrapperPrefix(wrappers: readonly string[]): string[] {
+  return wrappers.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(wrappers[0]) ? ['/usr/bin/env', ...wrappers] : [...wrappers];
+}
+
+/**
  * The overlay: the runtime's GDK and service DLLs, loaded natively in any
  * Proton. Not mscoree: loaded as native it cannot find the Proton's Mono.
  */
@@ -224,15 +278,26 @@ export async function launchViewDirectory(env: NodeJS.ProcessEnv, profileId: str
 
 const shellQuote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
 
-/** The "wine" the backend runs: Steam's command with the launch view's entry appended. */
-export async function writeSteamLauncher(directory: string, command: SteamProtonCommand): Promise<string> {
+/** A launcher script that runs `words` with its own arguments appended. */
+async function writeLauncher(directory: string, name: string, words: string[]): Promise<string> {
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
   await ownedDirectory(directory, 'launch wrapper directory');
-  const file = path.join(directory, 'steam-proton');
+  const file = path.join(directory, name);
   const temporary = `${file}.tmp-${process.pid}`;
-  await fs.writeFile(temporary, `#!/bin/sh\nexec ${command.prefix.map(shellQuote).join(' ')} "$@"\n`, { mode: 0o700, flag: 'w' });
+  await fs.writeFile(temporary, `#!/bin/sh\nexec ${words.map(shellQuote).join(' ')} "$@"\n`, { mode: 0o700, flag: 'w' });
   await fs.rename(temporary, file);
   return file;
+}
+
+/** The "wine" the backend runs: Steam's command with the launch view's entry appended. */
+export async function writeSteamLauncher(directory: string, command: SteamProtonCommand): Promise<string> {
+  const parts = parseSteamCommand(command.prefix);
+  return writeLauncher(directory, 'steam-proton', [...wrapperPrefix(parts.wrappers), ...parts.tool]);
+}
+
+/** The Nexus runtime's "wine" run inside the shortcut's launch wrappers. */
+export async function writeWrappedLauncher(directory: string, wrappers: string[], wine: string): Promise<string> {
+  return writeLauncher(directory, 'wrapped-wine', [...wrapperPrefix(wrappers), wine]);
 }
 
 /** Shares the game folder and the launch view with the Steam Linux Runtime container. */

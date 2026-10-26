@@ -17,7 +17,7 @@ import { GameContent } from './game-content.js';
 import type { AcquiredService, ServiceSessions } from './service-sessions.js';
 import { refreshOfflineLicenses } from './license-refresh.js';
 import { protonRootOf } from './proton-layout.js';
-import { launchViewDirectory, prepareSteamOverlay, steamCompatData, steamCompatMounts, steamProtonCommand, writeSteamLauncher } from './steam-compat.js';
+import { forwardedWrappers, launchViewDirectory, prepareSteamOverlay, steamCompatData, steamCompatMounts, steamProtonCommand, writeSteamLauncher, writeWrappedLauncher } from './steam-compat.js';
 import { profileIdOf } from '../shared/profile-id.js';
 
 /** Device-bound offline licenses written by `xodus-cli run --license-cache`. */
@@ -213,6 +213,14 @@ export class GameSession {
       const protonRunner = steamProton ? undefined : await prepareProtonRunner(wine, compatibilityDataPath, steamRoot, launchWrapper.command);
       const wineCommand = protonRunner?.command ?? wine;
       args[2] = preparedGameWine(protonRunner, launchWrapper.command);
+      // The shortcut's launch wrappers (armada-game-launch, gamemoderun, …) run
+      // around the game itself, so per-game settings reach its real process.
+      // With Steam's Proton they are already part of the Steam launcher.
+      const wrappers = steamProton ? [] : forwardedWrappers(options.steamCommand ?? []);
+      if (wrappers.length) {
+        args[2] = await writeWrappedLauncher(path.join(dataRoot, 'launch-wrappers', 'steam', game.id), wrappers, args[2]);
+        addGameLog(`Running the game inside the shortcut's launch wrappers: ${wrappers.join(' ')}`);
+      }
       if (viewDirectory) args.splice(args.indexOf('--materialize-chain') + 1, 0, '--materialize-all', '--view-dir', viewDirectory);
       const gamePrefix = steamPrefix ?? (protonRunner ? path.join(compatibilityDataPath, 'pfx') : legacyPrefixRoot);
       if (inspected.vcRedistEncrypted) {

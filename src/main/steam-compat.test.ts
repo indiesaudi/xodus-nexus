@@ -3,8 +3,11 @@ import { promises as fs } from 'node:fs';
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
-import { launchViewDirectory, OVERLAY_COMPONENTS, overlayRuntime, prefixArchitecture, prepareSteamOverlay, steamCompatData, steamCompatMounts, steamProtonCommand, steamProtonLayout, writeSteamLauncher } from './steam-compat.js';
-import { splitSteamCommand } from '../client/index.js';
+import {
+  forwardedSteamCommand, forwardedWrappers, launchViewDirectory, OVERLAY_COMPONENTS, overlayRuntime, parseSteamCommand, prefixArchitecture, prepareSteamOverlay,
+  steamCompatData, steamCompatMounts, steamProtonCommand, steamProtonLayout, wrapperPrefix, writeSteamLauncher, writeWrappedLauncher,
+} from './steam-compat.js';
+import { descendants, splitSteamCommand, steamLaunchPlan } from '../client/index.js';
 
 const linux = process.platform === 'linux';
 const proton = '/home/deck/.steam/root/compatibilitytools.d/GE-Proton10/proton';
@@ -30,9 +33,67 @@ describe('Steam launch command', () => {
     expect(splitSteamCommand(own)).toEqual({ own });
     expect(splitSteamCommand([...own, ...chain])).toEqual({ own, steamCommand: chain });
   });
+  it('runs the client again inside the wrappers and Steam\'s tracking, then forwards wrappers and tool', () => {
+    const entry = '/home/deck/.config/xodus-nexus/shortcuts/launch-game';
+    const first = steamLaunchPlan([armada, ...tracking, ...tool, '/bin/sh'], { HOME: '/home/deck' }, entry, '0123456789abcdef');
+    expect(first).toEqual({ rerun: {
+      words: [armada, ...tracking, '/bin/sh', entry, '0123456789abcdef', ...tool],
+      env: { HOME: '/home/deck', XODUS_NEXUS_STEAM_TRACKED: '1', XODUS_NEXUS_STEAM_WRAPPERS: JSON.stringify([armada]) },
+    } });
+    if (!('rerun' in first)) throw new Error('expected a rerun');
+    // The second run sees only the tool part after its id.
+    expect(steamLaunchPlan(tool, first.rerun.env, entry, '0123456789abcdef')).toEqual({ forwarded: [armada, ...tool] });
+    // Without a compatibility tool nothing follows the id, and the wrappers still go to the daemon.
+    expect(steamLaunchPlan(undefined, first.rerun.env, entry, '0123456789abcdef')).toEqual({ forwarded: [armada] });
+    expect(steamLaunchPlan(undefined, {}, entry, '0123456789abcdef')).toEqual({});
+    // Started without Steam's tracking (a desktop entry): forward directly.
+    expect(steamLaunchPlan(['gamemoderun', '/bin/sh'], {}, entry, '0123456789abcdef')).toEqual({ forwarded: ['gamemoderun'] });
+    expect(steamLaunchPlan(tool, { XODUS_NEXUS_STEAM_TRACKED: '1', XODUS_NEXUS_STEAM_WRAPPERS: '{bad' }, entry, '0123456789abcdef')).toEqual({ forwarded: tool });
+  });
+  it('finds the whole subtree to pass Steam\'s stop signal to, deepest first', async () => {
+    const proc = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-proc-'));
+    try {
+      const tree: Array<[number, string, number]> = [[10, 'pw-audio-namespace', 1], [11, 'reaper', 10], [12, 'xodus nexus) (bin', 11], [13, 'other', 1]];
+      for (const [pid, comm, ppid] of tree) {
+        await fs.mkdir(path.join(proc, String(pid)));
+        await fs.writeFile(path.join(proc, String(pid), 'stat'), `${pid} (${comm}) S ${ppid} ${pid} ${pid} 0 -1`);
+      }
+      await fs.mkdir(path.join(proc, 'self'));
+      expect(await descendants(10, proc)).toEqual([12, 11]);
+      expect(await descendants(13, proc)).toEqual([]);
+    } finally { await fs.rm(proc, { recursive: true, force: true }); }
+  });
   it('adds mounts after any Steam already set', () => {
     expect(steamCompatMounts({}, ['/games/a', '/run/user/1000/v'])).toBe('/games/a:/run/user/1000/v');
     expect(steamCompatMounts({ STEAM_COMPAT_MOUNTS: '/mnt/x' }, ['/games/a'])).toBe('/mnt/x:/games/a');
+  });
+});
+
+// Captured on ArmadaOS: launch options `"<launch-game>" "<id>" /usr/libexec/armada/armada-game-launch %command%`.
+const armada = '/usr/libexec/armada/armada-game-launch';
+const tracking = ['/home/deck/.local/share/Steam/linuxarm64/pw-audio-namespace', '--', '/home/deck/.local/share/Steam/steamrtarm64/reaper', 'SteamLaunch', 'AppId=3715325483', '--'];
+const tool = ['/home/deck/.local/share/Steam/steamapps/common/SteamLinuxRuntime_4-arm64/_v2-entry-point', '--verb=waitforexitandrun', '--', proton, 'waitforexitandrun'];
+
+describe('Steam command parts', () => {
+  it('splits wrappers, Steam tracking and the placeholder of a native shortcut', () => {
+    expect(parseSteamCommand([armada, ...tracking, '/bin/sh'])).toEqual({ wrappers: [armada], tracking, tool: [] });
+    expect(parseSteamCommand(['/bin/sh'])).toEqual({ wrappers: [], tracking: [], tool: [] });
+    expect(parseSteamCommand(['gamemoderun', '/bin/sh'])).toEqual({ wrappers: ['gamemoderun'], tracking: [], tool: [] });
+  });
+  it('splits the compatibility tool part of a Proton shortcut', () => {
+    const parts = parseSteamCommand(['DXVK_HUD=fps', armada, ...tracking, ...tool, '/bin/sh']);
+    expect(parts).toEqual({ wrappers: ['DXVK_HUD=fps', armada], tracking, tool });
+    // The daemon gets the wrappers and the tool part; tracking stays around the client.
+    const forwarded = forwardedSteamCommand(parts);
+    expect(forwarded).toEqual(['DXVK_HUD=fps', armada, ...tool]);
+    expect(forwardedWrappers(forwarded)).toEqual(['DXVK_HUD=fps', armada]);
+    expect(steamProtonCommand(forwarded)?.prefix).toEqual(forwarded);
+    expect(forwardedWrappers([armada])).toEqual([armada]);
+  });
+  it('runs leading VAR=value wrappers through env', () => {
+    expect(wrapperPrefix(['DXVK_HUD=fps', armada])).toEqual(['/usr/bin/env', 'DXVK_HUD=fps', armada]);
+    expect(wrapperPrefix([armada, 'X=1'])).toEqual([armada, 'X=1']);
+    expect(wrapperPrefix([])).toEqual([]);
   });
 });
 
@@ -232,8 +293,18 @@ describe.skipIf(!linux)('Steam prefix and overlay', () => {
   });
 
   it('writes a launcher that runs Steam\'s command with the view entry appended', async () => {
-    const file = await writeSteamLauncher(path.join(root, 'wrappers'), { prefix: ['/steam/proton', 'waitforexitandrun', "it's"], protonRoot: '/steam' });
-    expect(await fs.readFile(file, 'utf8')).toBe(`#!/bin/sh\nexec '/steam/proton' 'waitforexitandrun' 'it'"'"'s' "$@"\n`);
+    const file = await writeSteamLauncher(path.join(root, 'wrappers'), { prefix: ["LABEL=it's", '/steam/proton', 'waitforexitandrun'], protonRoot: '/steam' });
+    expect(await fs.readFile(file, 'utf8')).toBe(`#!/bin/sh\nexec '/usr/bin/env' 'LABEL=it'"'"'s' '/steam/proton' 'waitforexitandrun' "$@"\n`);
     expect((await fs.stat(file)).mode & 0o777).toBe(0o700);
+  });
+
+  it('never runs Steam\'s tracking from the daemon', async () => {
+    const file = await writeSteamLauncher(path.join(root, 'wrappers'), { prefix: [armada, ...tracking, ...tool], protonRoot: path.dirname(proton) });
+    expect(await fs.readFile(file, 'utf8')).not.toContain('reaper');
+  });
+
+  it('wraps the Nexus runtime launcher in the shortcut\'s wrappers', async () => {
+    const file = await writeWrappedLauncher(path.join(root, 'wrappers'), [armada], '/data/compatdata/x/xodus-proton-wine');
+    expect(await fs.readFile(file, 'utf8')).toBe(`#!/bin/sh\nexec '${armada}' '/data/compatdata/x/xodus-proton-wine' "$@"\n`);
   });
 });
