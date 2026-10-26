@@ -75,7 +75,7 @@ Flatpak version available through Discover. Other browsers are not supported.
 
 ## Upgrade
 
-- **From launcher 0.3.15:** open **Settings**, choose **Check for updates**, then **Update launcher** and restart Nexus. Then update the **backend** in Settings; the runtime stays the same.
+- **From launcher 0.3.15:** open **Settings**, choose **Check for updates**, then **Update launcher** and restart Nexus. Then update the **backend** in Settings; the runtime stays the same. Update the launcher first: with the new backend, launcher 0.3.15 cannot start games.
 - **From launcher 0.3.14 or older:** these versions cannot update themselves, because this fork's repository was renamed. Run the install command from [Install](#install) again. Your games, sign-in and settings are kept.
 - **After upgrading:**
   - Choose **Add to Steam** again for each game you start from Steam. This updates the shortcut so Steam's compatibility-tool choice and launch wrappers reach Nexus. It keeps the shortcut's artwork and settings.
