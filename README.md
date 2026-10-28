@@ -13,6 +13,24 @@ Your Microsoft Store PC games, on Linux.
 
 </div>
 
+> [!IMPORTANT]
+> **This fork's `main` now tracks upstream Xodus Nexus `develop` unchanged.**
+> Offline play (#373), native arm64 launcher and backend builds (#374), per-game FEX settings (#420)
+> and the arm64 runtime loader (#421) are merged upstream. Features that are not merged upstream
+> moved off `main`:
+>
+> - **Background service** (Steam's **Exit game** closes games gracefully): branch
+>   [`feature/background-daemon`](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/tree/feature/background-daemon),
+>   proposed upstream in [#360](https://github.com/domsvoboda/xodus-nexus/pull/360).
+> - **Any Proton per game** and the **Xodus Nexus** Steam compatibility tool: branch
+>   [`feature/steam-any-proton`](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/tree/feature/steam-any-proton),
+>   proposed upstream in [#381](https://github.com/domsvoboda/xodus-nexus/pull/381).
+> - **Fork release 0.4.1** with all of the above combined: branch
+>   [`archive/main-0.4.1`](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/tree/archive/main-0.4.1).
+>
+> Builds from `main` install and update from the upstream releases linked below. See the
+> [changelog](CHANGELOG.md) for the full list of removed features.
+
 > [!CAUTION]
 > **Xodus Nexus is an independent, unofficial project built on Xodus. It is not an official project or release from the upstream Xodus developers.**
 >

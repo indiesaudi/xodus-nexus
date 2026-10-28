@@ -1,5 +1,25 @@
 # Changelog
 
+## Fork main resync (2026-10-28)
+
+This fork's `main` now matches upstream `develop`. Compared with the fork's 0.4.1 release
+(kept on `archive/main-0.4.1`), these features were removed from `main`:
+
+- **Background service** (Settings → Advanced → Background service): the systemd user service, the thin
+  Steam client, graceful **Exit game** with finished cloud-save uploads, launch recovery, and the
+  `nexus-close-window` runtime helper with its build workflow. Now on `feature/background-daemon` (#360).
+- **Any Proton per game**: the **Xodus Nexus** entry in Steam's Compatibility dropdown, honoring the Proton
+  chosen in Steam for Nexus shortcuts, live Add to Steam, the Xbox-only overlay under other Protons, and
+  the PlayFab Game Saves adapter and full launch view backend patches (`xodus-full-view.patch`,
+  `xodus-playfab-view-adapter.patch`). Now on `feature/steam-any-proton` (#381).
+- **Experimental arm64 game runtime pipeline**: the CachyOS arm64 Proton base lock, ARM64X overlay and
+  ARM64EC DXVK builds (`runtime-arm64.yml`, `scripts/arm64/`). Native arm64 launcher and backend builds
+  remain, from upstream #374. Kept on `archive/main-0.4.1`.
+- **Fork backend 0.2.17**: `main` uses upstream's backend recipe again.
+- **Fork release pins**: launcher updates, backend and runtime downloads, the installer and issue links
+  point at upstream `domsvoboda/xodus-nexus` instead of this fork. The Tolgee sync job is no longer
+  limited to the upstream repository, so it fails on this fork without Tolgee credentials.
+
 ## Unreleased
 
 - Add native arm64 launcher and backend builds, with architecture-aware downloads and updates. Thanks @indiesaudi.
