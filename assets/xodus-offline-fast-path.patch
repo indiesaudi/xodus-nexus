@@ -1,8 +1,8 @@
 diff --git a/crates/xodus-cli/src/commands/run.rs b/crates/xodus-cli/src/commands/run.rs
-index e0335b7..fcaf736 100644
+index 2068882..88429bc 100644
 --- a/crates/xodus-cli/src/commands/run.rs
 +++ b/crates/xodus-cli/src/commands/run.rs
-@@ -733,11 +733,15 @@ pub async fn run(
+@@ -750,11 +750,15 @@ pub async fn run(
          .arg(&stub_path)
          .env("WINE_DLL_FILE_MAP", env_value)
          .env("WINE_EXE_FILE_MAP", exe_env_value);

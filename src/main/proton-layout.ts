@@ -1,71 +1,48 @@
 import { constants, promises as fs } from 'node:fs';
 import path from 'node:path';
-import { currentArch, isLinuxElf64, type NexusArch } from './arch.js';
 
-/** Where a Proton tree keeps its loader, pristine prefix and PE modules. */
+/** Where a Proton build keeps its loader, pristine prefix and host PE modules. */
 export interface ProtonLayout {
-  /** Directory under `files/` holding `wine` and `wineserver`. */
-  bin: string;
+  /** Directory under `files/` holding the Wine loader. */
+  bin: 'bin' | 'bin-arm64';
   /** Directory under `files/share/` holding the pristine prefix. */
-  defaultPrefix: string;
-  /** Directory under `files/lib/<library>/` holding the host's PE modules. */
+  defaultPrefix: 'default_pfx' | 'default_pfx_arm64';
+  /** Directory under `files/lib/<library>/` holding the prefix's system32 modules. */
   peArch: 'x86_64-windows' | 'aarch64-windows';
 }
 
-/** Valve/xodus x86_64 Proton. */
+/** x86_64 Proton (and an x86_64 runtime run under FEX on an arm64 host). */
 export const X86_64_LAYOUT: ProtonLayout = { bin: 'bin', defaultPrefix: 'default_pfx', peArch: 'x86_64-windows' };
-/** CachyOS arm64 Proton: its own loader directory and prefix, ARM64X modules. */
+/** Proton built with `--target-arch=arm64`: native loader, ARM64X modules. */
 export const ARM64_LAYOUT: ProtonLayout = { bin: 'bin-arm64', defaultPrefix: 'default_pfx_arm64', peArch: 'aarch64-windows' };
+
+/** The layout a Wine loader path belongs to, from its bin directory. */
+export function layoutOfWine(winePath: string): ProtonLayout {
+  return path.basename(path.dirname(winePath)) === ARM64_LAYOUT.bin ? ARM64_LAYOUT : X86_64_LAYOUT;
+}
 
 /** The Proton root for a Wine loader path: two levels above its bin directory. */
 export function protonRootOf(winePath: string): string {
   return path.resolve(path.dirname(winePath), '..', '..');
 }
 
-async function readable(file: string): Promise<boolean> {
-  return fs.access(file, constants.R_OK).then(() => true, () => false);
+/** The runtime archive suffix for a host: `-x86_64.tar.xz` or `-aarch64.tar.xz`. */
+export function runtimeArchiveArch(arch: string = process.arch): 'x86_64' | 'aarch64' {
+  if (arch === 'x64') return 'x86_64';
+  if (arch === 'arm64') return 'aarch64';
+  throw new Error(`Xodus Nexus runtimes are not built for ${arch} hosts.`);
 }
 
-async function elfArch(file: string): Promise<NexusArch | undefined> {
-  let handle;
-  try {
-    handle = await fs.open(file, 'r');
-    const header = Buffer.alloc(64);
-    const { bytesRead } = await handle.read(header, 0, 64, 0);
-    const bytes = header.subarray(0, bytesRead);
-    if (isLinuxElf64(bytes, 'arm64')) return 'arm64';
-    if (isLinuxElf64(bytes, 'x64')) return 'x64';
-    return undefined;
-  } catch {
-    return undefined;
-  } finally {
-    await handle?.close().catch(() => undefined);
+/**
+ * The loader to run from a Proton root on this host. An arm64 host prefers the
+ * native arm64 loader; every other combination uses `files/bin/wine`.
+ */
+export async function runtimeLoader(protonRoot: string, arch: string = process.arch, allowEmulated = true): Promise<string> {
+  runtimeArchiveArch(arch);
+  if (arch === 'arm64') {
+    const native = path.join(protonRoot, 'files', ARM64_LAYOUT.bin, 'wine');
+    if (await fs.access(native, constants.X_OK).then(() => true, () => false)) return native;
+    if (!allowEmulated) throw new Error('The ARM64 runtime has no executable native loader.');
   }
-}
-
-/**
- * The layout of the Proton tree a Wine loader belongs to. A `bin-arm64`
- * loader directory is the CachyOS arm64 layout; otherwise the loader's ELF
- * machine decides (a GE-Proton aarch64 build keeps `files/bin/wine`), with
- * the prefix directory probed because only CachyOS renames it.
- */
-export async function detectProtonLayout(winePath: string): Promise<ProtonLayout> {
-  const bin = path.basename(path.dirname(winePath));
-  if (bin === ARM64_LAYOUT.bin) return ARM64_LAYOUT;
-  if (await elfArch(winePath) !== 'arm64') return { ...X86_64_LAYOUT, bin };
-  const root = protonRootOf(winePath);
-  const renamedPrefix = await readable(path.join(root, 'files', 'share', ARM64_LAYOUT.defaultPrefix));
-  return { bin, defaultPrefix: renamedPrefix ? ARM64_LAYOUT.defaultPrefix : X86_64_LAYOUT.defaultPrefix, peArch: ARM64_LAYOUT.peArch };
-}
-
-/**
- * The Wine loader an extracted Proton tree offers this launcher's
- * architecture: `files/bin-arm64/wine` first on arm64, else `files/bin/wine`.
- * Returns the conventional path when neither exists so callers report it.
- */
-export async function locateProtonWine(protonRoot: string, arch: NexusArch = currentArch()): Promise<string> {
-  const candidates = (arch === 'arm64' ? [ARM64_LAYOUT, X86_64_LAYOUT] : [X86_64_LAYOUT])
-    .map((layout) => path.join(protonRoot, 'files', layout.bin, 'wine'));
-  for (const candidate of candidates) if (await readable(candidate)) return candidate;
-  return candidates[candidates.length - 1];
+  return path.join(protonRoot, 'files', X86_64_LAYOUT.bin, 'wine');
 }

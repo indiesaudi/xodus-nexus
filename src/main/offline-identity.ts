@@ -24,16 +24,30 @@ export function offlineIdentityCacheDirectory(compatibilityDataPath: string): st
 export async function removeOfflineIdentityCaches(dataRoot: string): Promise<number> {
   const compatRoot = path.join(dataRoot, 'compatdata');
   let entries: string[] = [];
-  try { entries = await fs.readdir(compatRoot); } catch { return 0; }
+  try {
+    const stat = await fs.lstat(compatRoot);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) return 0;
+    entries = await fs.readdir(compatRoot);
+  } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0; throw error; }
   let removed = 0;
   for (const entry of entries) {
     const directory = offlineIdentityCacheDirectory(path.join(compatRoot, entry));
     try {
+      // Never follow a prefix or intermediate link into another installation,
+      // the user's home or a shared Wine profile while removing caches.
+      let current = compatRoot;
+      let safe = true;
+      for (const part of path.relative(compatRoot, directory).split(path.sep)) {
+        current = path.join(current, part);
+        const stat = await fs.lstat(current);
+        if (stat.isSymbolicLink() || !stat.isDirectory()) { safe = false; break; }
+      }
+      if (!safe) continue;
       const stat = await fs.lstat(directory);
       if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
       await fs.rm(directory, { recursive: true, force: true });
       removed++;
-    } catch { /* no cache in this prefix */ }
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   }
   return removed;
 }

@@ -5,9 +5,8 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
-import { GameShortcuts, desktopArgument, shortcutArguments, shortcutInstanceData, shortcutInstanceRequest, shortcutTitleStem } from './game-shortcuts.js';
+import { GameShortcuts, shortcutLauncherPath, desktopArgument, shortcutArguments, shortcutInstanceData, shortcutInstanceRequest, shortcutTitleStem } from './game-shortcuts.js';
 import { ShortcutLaunch } from './shortcut-launch.js';
-import { ARMADA_LAUNCH_WRAPPER, steamArgument } from './steam-shortcuts.js';
 
 const execute = promisify(execFile);
 const id = '0123456789abcdef';
@@ -42,7 +41,7 @@ it('creates Steam launch descriptions without unwanted desktop/menu entries and 
     expect(steam.executable).toBe('"/bin/sh"');
     expect(steam.options).toContain('"' + id + '"');
     expect((await execute('/bin/sh', [path.join(f.locations.userData, 'shortcuts/launch-game'), id])).stdout.trim())
-      .toBe(`--nexus-client --nexus-profile ${f.locations.userData} --launch-game ${id}`);
+      .toBe(`--nexus-profile ${f.locations.userData} --launch-game ${id}`);
     const nexus = await f.shortcuts.steamLaunch();
     expect(nexus.title).toBe('Xodus Nexus');
     expect(nexus.identity).not.toBe(steam.identity);
@@ -54,29 +53,13 @@ it('creates Steam launch descriptions without unwanted desktop/menu entries and 
     await expect(f.shortcuts.steamLaunch({ ...game, id: '../bad' })).rejects.toThrow('ready');
   } finally { await fs.rm(f.root, { recursive: true, force: true }); }
 });
-it('puts Steam\'s command after the script and id, behind ArmadaOS\'s wrapper where it exists', async () => {
-  const f = await fixture();
-  try {
-    await f.shortcuts.initialize();
-    const plain = await f.shortcuts.steamLaunch({ ...game, title: 'A game' });
-    expect(plain.options).toBe(`${desktopShortcutWords(f)} "${id}" %command%`);
-    await fs.writeFile(f.locations.armadaWrapper, '#!/bin/sh\n', { mode: 0o755 });
-    const armada = await f.shortcuts.steamLaunch({ ...game, title: 'A game' });
-    expect(armada.options).toBe(`${desktopShortcutWords(f)} "${id}" ${ARMADA_LAUNCH_WRAPPER} %command%`);
-    // The launcher's own Steam entry takes no game command.
-    expect((await f.shortcuts.steamLaunch()).options).not.toContain('%command%');
-  } finally { await fs.rm(f.root, { recursive: true, force: true }); }
-});
-function desktopShortcutWords(f: Awaited<ReturnType<typeof fixture>>): string {
-  return steamArgument(path.join(f.locations.userData, 'shortcuts/launch-game'));
-}
 async function fixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-shortcuts-'));
   const launcher = path.join(root, 'Launcher $`%\' name.AppImage');
   await fs.copyFile('/bin/echo', launcher); await fs.chmod(launcher, 0o700);
   const icon = path.join(root, 'icon.png'); await fs.writeFile(icon, 'fixture icon');
   const locations = { userData: path.join(root, 'profile'), desktop: path.join(root, 'Desktop'),
-    applications: path.join(root, 'applications'), launcher, icon, armadaWrapper: path.join(root, 'armada-game-launch') };
+    applications: path.join(root, 'applications'), launcher, icon };
   return { root, locations, shortcuts: new GameShortcuts(locations) };
 }
 
@@ -93,7 +76,7 @@ it('creates profile-scoped desktop/menu entries and starts the launcher, not the
     expect((await fs.stat(menu)).mode & 0o777).toBe(0o644);
     const entry = path.join(f.locations.userData, 'shortcuts/launch-game');
     const result = await execute(entry, [id]);
-    expect(result.stdout.trim()).toBe(`--nexus-client --nexus-profile ${f.locations.userData} --launch-game ${id}`);
+    expect(result.stdout.trim()).toBe(`--nexus-profile ${f.locations.userData} --launch-game ${id}`);
     const before = await fs.readFile(target, 'utf8');
     // AppImage update replaces the file at the same path; shortcut stays valid.
     await fs.rename(f.locations.launcher, `${f.locations.launcher}.old`);
@@ -268,4 +251,19 @@ it('coalesces duplicate requests, refuses concurrent games, and recovers after s
   const failure = new ShortcutLaunch(() => undefined, async () => { throw Error('missing runtime'); });
   await expect(failure.request(id)).rejects.toThrow('missing runtime');
   expect(failure.preparing).toBe(false);
+});
+
+it('follows the stable launcher symlink after an update instead of pinning its resolved version',async()=>{
+  const f=await fixture();
+  try{
+    const stable=path.join(f.root,'Xodus-Nexus.AppImage');await fs.symlink(f.locations.launcher,stable);
+    expect(await shortcutLauncherPath(f.locations.launcher)).toBe(stable);
+    const shortcuts=new GameShortcuts({...f.locations,launcher:stable});await shortcuts.initialize();
+    const helper=path.join(f.locations.userData,'shortcuts/launch-game');
+    expect((await execute('/bin/sh',[helper,id])).stdout).toContain('--launch-game '+id);
+    const updated=path.join(f.root,'updated');await fs.writeFile(updated,'#!/bin/sh\nprintf updated\n',{mode:0o700});
+    await fs.unlink(stable);await fs.symlink(updated,stable);
+    expect((await execute('/bin/sh',[helper,id])).stdout).toBe('updated');
+    expect(await shortcutLauncherPath(f.locations.launcher,updated)).toBe(f.locations.launcher);
+  }finally{await fs.rm(f.root,{recursive:true,force:true});}
 });

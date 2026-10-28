@@ -1,3 +1,4 @@
+import {chatComposeKey} from './chat-compose-key';
 import { ui, uiText } from './i18n';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { LoaderCircle, Send, UserRound, X } from 'lucide-react';
@@ -154,7 +155,7 @@ export function Friends({ data, close, docked=false }: { data: AppSnapshot; clos
                 {conversation&&!conversation.messages.length?<p>{ui("ui.no_messages_returned_by_xbox_5a80816")}</p>:null}
               </div>
               {uncertain?<p role="status">{accepted?ui("ui.xbox_accepted_the_message_but_it_is_not_yet_conf_6ca6e90"):ui("ui.sending_could_not_be_confirmed_your_draft_is_kep_504246d")}</p>:null}
-              <form onSubmit={event=>void send(event)}><label htmlFor="xbox-message">{ui("ui.message_2f77668")}</label><textarea id="xbox-message" value={draft} maxLength={512} onChange={event=>setDraft(event.target.value)} disabled={sending} />
+              <form onSubmit={event=>void send(event)}><label htmlFor="xbox-message">{ui("ui.message_2f77668")}</label><textarea onKeyDown={chatComposeKey} aria-description={ui('friends.send_shortcut')} id="xbox-message" value={draft} maxLength={512} onChange={event=>setDraft(event.target.value)} disabled={sending} />
                 <small>{ui('friends.characters', { count: Array.from(draft).length })}</small><button type="submit" disabled={busy||uncertain||!xboxMessageText(draft)}><Send />{ui("ui.send_f6f4688")}</button></form>
             </>:<div className="friends-empty"><UserRound aria-hidden="true" /><h3>{ui("ui.your_conversations_903532e")}</h3><p>{ui("ui.select_a_friend_to_start_chatting_b5387d2")}</p></div>}
           </section>

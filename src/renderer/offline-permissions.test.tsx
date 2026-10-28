@@ -50,3 +50,11 @@ it('warns about the one-PC rule and the remaining yearly changes before any chan
   expect(disable.confirmLabel).toBe('Turn off');
   expect(offlinePermissionConfirmation({ ...status(false, 0), remainingToggles: undefined, maxToggles: undefined }, true).message).toContain('limits how often');
 });
+
+it('does not spend a designation change on unsupported components but always allows turning it off', () => {
+  for(const enabled of [false,true]) {
+    const html=renderToStaticMarkup(<OfflinePermissionsView status={{...status(enabled,2),launchSupported:false}} busy={false} onToggle={()=>{}} onRetry={()=>{}}/>);
+    expect(html).toContain('compatible Nexus backend and runtime');
+    expect(/<input type="checkbox"[^>]*disabled=""/.test(html)).toBe(!enabled);
+  }
+});

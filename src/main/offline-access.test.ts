@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { applyOfflinePermissions, bindOfflineAccess, licenseCacheDirectory, revokeOfflineAccess } from './offline-access.js';
+import { applyOfflinePermissions, assertOfflineAccessReady, bindOfflineAccess, licenseCacheDirectory, offlineAccessRevoked, revokeOfflineAccess } from './offline-access.js';
 import { accountCacheKey, offlineIdentityCacheDirectory } from './offline-identity.js';
 
 const roots: string[] = [];
@@ -60,5 +60,35 @@ describe('offline access revocation', () => {
     await fs.rm(path.join(root, 'offline-owner'), { force: true });
     expect(await bindOfflineAccess(root, 'one@example.test')).toBe(false);
     expect(await exists(license)).toBe(true);
+  });
+
+  it('retains a fail-closed marker after cleanup fails and retries before another launch', async () => {
+    const { root, license } = await populated();
+    const original = fs.rm.bind(fs);
+    const failure = vi.spyOn(fs, 'rm').mockImplementation(async (target, options) => {
+      if (String(target) === licenseCacheDirectory(root)) throw Object.assign(new Error('denied'), { code: 'EACCES' });
+      return original(target, options);
+    });
+    try {
+      await expect(revokeOfflineAccess(root)).rejects.toThrow('denied');
+      expect(await exists(license)).toBe(true);
+      expect(await offlineAccessRevoked(root)).toBe(true);
+      await expect(assertOfflineAccessReady(root)).rejects.toThrow('revoked');
+    } finally { failure.mockRestore(); }
+    expect(await bindOfflineAccess(root, 'one@example.test')).toBe(true);
+    expect(await exists(license)).toBe(false);
+    expect(await offlineAccessRevoked(root)).toBe(false);
+    await expect(assertOfflineAccessReady(root)).resolves.toBeUndefined();
+  });
+
+  it('does not follow a revocation marker symlink or replace the account after owner-read errors', async () => {
+    const { root } = await populated();
+    const outside = path.join(root, 'must-stay'); await fs.writeFile(outside, 'unchanged');
+    await fs.symlink(outside, path.join(root, 'offline-revoked'));
+    await expect(revokeOfflineAccess(root)).rejects.toThrow();
+    expect(await fs.readFile(outside, 'utf8')).toBe('unchanged');
+    await fs.unlink(path.join(root, 'offline-revoked'));
+    await fs.mkdir(path.join(root, 'offline-owner'));
+    await expect(bindOfflineAccess(root, 'two@example.test')).rejects.toThrow();
   });
 });

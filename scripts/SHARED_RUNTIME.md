@@ -316,62 +316,6 @@ claim byte-identical DLLs across paths or toolchain versions; DWARF paths,
 toolchains, and PE timestamps/build IDs can differ. Tool versions and output
 hashes are recorded. The original working candidate stays available.
 
-### arm64 (experimental)
-
-Nexus's runtime changes are overlays on a Proton base, so an arm64 runtime
-uses a different base and an extra PE build, not a port. The base is
-[CachyOS Proton arm64](https://github.com/CachyOS/proton-cachyos), pinned by
-tag, archive SHA-512 and loader hashes in
-[`runtime-base-arm64.lock.json`](runtime-base-arm64.lock.json); it is the
-lineage ArmadaOS ships. Its layout differs from the x86_64 snapshot:
-`files/bin-arm64/{wine,wineserver}`, `files/share/default_pfx_arm64`, ARM64X
-hybrid modules in `files/lib/wine/aarch64-windows` and a prefix whose
-`system32` is ARM64X and `syswow64` is i386 (x86_64 games run through
-ARM64EC/FEX, which the base bundles). The launcher detects that layout
-(`src/main/proton-layout.ts`) and reads per-architecture overlay checksums
-from `componentsByArch` in `XODUS_NEXUS_PATCH.json`.
-
-[`arm64/build-components.sh`](arm64/build-components.sh) builds the overlay
-set on an arm64 Linux host (`ubuntu-24.04-arm` in
-`.github/workflows/runtime-arm64.yml`): it reuses
-`build-shared-runtime.mjs --prepare-only` for the exact pinned checkouts and
-patches, fetches an llvm-mingw release (clang + lld with ARM64EC support),
-configures the patched Wine with `--enable-archs=aarch64,arm64ec` and builds
-`xgameruntime`, `winhttp`, `mscoree`, `windows.web`, `twinapi.appcore` and
-`d3dcompiler_47` as ARM64X hybrids, plus nghttp2 and vkd3d-shader as ARM64EC
-(`--host=aarch64-w64-mingw32` with the `arm64ec-w64-mingw32-*` tools, since
-config.sub does not know arm64ec). `d3dcompiler_47` is part of the set because
-the arm64 base links vkd3d-shader into it statically, so the HLSL
-state-keyword patch cannot travel in `libvkd3d-shader-1.dll` there. Machine
-types are verified (ARM64X reports ARM64; ARM64EC reports AMD64 and is told
-apart by its CHPE load-config metadata). [`arm64/collect-components.mjs`](arm64/collect-components.mjs)
-then produces a components directory with the same contract as the x86_64
-build: the pinned-source provenance from `--prepare-only`, those PE modules,
-the compatibility layer from `runtime-compat/build.mjs` (the `wine-launcher`
-shim compiled for aarch64; `PlayFabGameSave.dll` and
-`gaming-services-version.exe` stay x86_64 and run through the base's
-ARM64EC/FEX path like the games they serve), DXVK built for `arm64ec` by
-`build-runtime-dxvk.mjs` (same pinned sources, patch and native compiler
-tests; a generated llvm-mingw cross file that pre-includes the standard
-headers libc++ does not provide transitively) and the licence texts.
-`build-runtime-media.mjs` builds the pinned FFmpeg libraries for the host it
-runs on, so the workflow's `media` job runs on `ubuntu-22.04-arm`.
-
-`assemble-shared-runtime.mjs` detects the base layout
-([`runtime-layout.mjs`](runtime-layout.mjs)), refuses components built for the
-other PE architecture, overlays into `aarch64-windows`,
-`default_pfx_arm64/.../system32` and `files/lib/aarch64-linux-gnu`, replaces
-`files/bin-arm64/wine` with the shim and records `arch`, `hostPeArch` and
-`componentsByArch` in `XODUS_NEXUS_PATCH.json`. The script then boots a fresh
-prefix with the assembled runtime, runs an arm64 and an x86_64 probe that load
-the overlaid `xgameruntime.dll`, checks the default prefix carries the
-overlaid DXVK and d3dcompiler, and packages
-`xodus-nexus-runtime-<version>-aarch64.tar.xz` with its SHA-512 and
-corresponding source. The workflow uploads that as the `nexus-runtime-aarch64`
-candidate; it is never published from CI. Not yet done: running the x86_64
-contract, HTTP/2, media and DXVK probe suites under the arm64 runtime (they
-are built by the x86_64 pipeline only), and on-device verification.
-
 ## Patch sequence
 
 1. `xgameruntime-shared-foundation.patch`: complete development-line delta

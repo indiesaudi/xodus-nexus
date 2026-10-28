@@ -12,10 +12,10 @@ index 7bb7bdd..4540549 100644
          eprintln!("{}", err);
          return ExitCode::FAILURE;
 diff --git a/crates/xodus-cli/src/commands/run.rs b/crates/xodus-cli/src/commands/run.rs
-index fcaf736..b25a7d2 100644
+index 88429bc..2a5b934 100644
 --- a/crates/xodus-cli/src/commands/run.rs
 +++ b/crates/xodus-cli/src/commands/run.rs
-@@ -536,6 +536,7 @@ pub async fn run(
+@@ -547,6 +547,7 @@ pub async fn run(
      materialize_chain: bool,
      market: Option<String>,
      license_cache: Option<String>,
@@ -23,7 +23,7 @@ index fcaf736..b25a7d2 100644
  ) -> ExitCode {
      let mut lfiles: HashMap<String, SegmentFile> = HashMap::new();
  
-@@ -580,6 +581,7 @@ pub async fn run(
+@@ -597,6 +598,7 @@ pub async fn run(
          xvd.content_id().to_string(),
          market.unwrap_or("neutral".to_string()),
          license_cache.as_deref(),
@@ -31,7 +31,7 @@ index fcaf736..b25a7d2 100644
      )
      .await;
      if let Err(err) = license {
-@@ -733,7 +735,13 @@ pub async fn run(
+@@ -750,7 +752,13 @@ pub async fn run(
          .arg(&stub_path)
          .env("WINE_DLL_FILE_MAP", env_value)
          .env("WINE_EXE_FILE_MAP", exe_env_value);

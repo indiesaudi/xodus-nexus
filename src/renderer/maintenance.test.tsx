@@ -6,6 +6,17 @@ it('has one sidebar queue entry below Settings', () => {
   const html = renderToStaticMarkup(<Sidebar data={demoSnapshot()} page="downloads" go={() => {}} />);
   expect(html.match(/class="queue-summary /g)).toHaveLength(1); expect(html.indexOf('Settings')).toBeLessThan(html.indexOf('Install Queue')); expect(html).toContain('aria-current="page"');
 });
+it('keeps Social out of the sidebar now that Friends has its own dock',()=>{
+  const html=renderToStaticMarkup(<Sidebar data={demoSnapshot()} page="social" go={()=>{}}/>);
+  expect(html).not.toContain('Xbox Social');expect(html).toContain('Settings');
+});
+it('offers an app-owned overlay shortcut and left/right shelf settings with left as the default',()=>{
+  const html=renderToStaticMarkup(<SettingsPage data={demoSnapshot()} toast={()=>{}}/>);
+  expect(html).toContain('Keyboard shortcut');expect(html).toContain('Super+G');expect(html).toContain('Shelf position');expect(html).toContain('value="left" selected');
+  expect(html.indexOf('Storage and launch paths')).toBeLessThan(html.indexOf('aria-label="Nexus Overlay"'));
+  expect(html).toMatch(/<details class="settings-card settings-guide" aria-label="Nexus Overlay">/);
+  expect(html).not.toContain('Desktop portal');
+});
 it('keeps backend health and launcher update notices distinct', () => {
   const data = demoSnapshot(); data.launcherUpdate!.latestVersion = '0.3.1';
   const html = renderToStaticMarkup(<TopStatus data={data} go={() => {}} />);

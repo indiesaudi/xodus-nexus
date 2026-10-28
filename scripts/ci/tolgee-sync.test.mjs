@@ -49,8 +49,7 @@ test('only main can upload, no PR secrets, write permissions, package build or r
   assert.ok(workflow.on.push.paths.includes('assets/locales/en.json'));
   assert.deepEqual(workflow.permissions, { contents: 'read' });
   assert.equal(workflow.concurrency['cancel-in-progress'], false);
-  // This fork never uploads to upstream's Tolgee project.
-  assert.equal(workflow.jobs.source.if, "github.ref == 'refs/heads/main' && github.repository == 'domsvoboda/xodus-nexus'");
+  assert.equal(workflow.jobs.source.if, "github.ref == 'refs/heads/main'");
   const steps = workflow.jobs.source.steps;
   assert.deepEqual(steps[0].with, { ref: 'main', 'persist-credentials': false });
   assert.equal(steps.find(step => step.run?.includes('npm ci')).run, 'npm ci --ignore-scripts');
@@ -68,6 +67,20 @@ test('staging accepts partial reviewed languages without altering English or shi
   const result = await validatePull(folder, english);
   assert.deepEqual({ ...result.cs }, { welcome: 'Ahoj {{name}}' });
   assert.deepEqual(english, { welcome: 'Hello {{name}}' });
+});
+
+test('reviewed export is manual main-only and cannot write Git or publish builds', async () => {
+  const workflow = yaml.load(await fs.readFile('.github/workflows/translation-export.yml', 'utf8'));
+  assert.deepEqual(Object.keys(workflow.on), ['workflow_dispatch']);
+  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  assert.equal(workflow.jobs.export.if, "github.ref == 'refs/heads/main'");
+  assert.deepEqual(workflow.jobs.export.steps[0].with, { ref: 'main', 'persist-credentials': false });
+  const secrets = workflow.jobs.export.steps.filter(step => JSON.stringify(step).includes('secrets.'));
+  assert.equal(secrets.length, 1);
+  assert.equal(secrets[0].env.TOLGEE_API_KEY, '${{ secrets.TOLGEE_REVIEW_API_KEY }}');
+  assert.equal(secrets[0].run, 'npm run i18n:pull');
+  assert.deepEqual(workflow.concurrency, yaml.load(await fs.readFile('.github/workflows/translations.yml', 'utf8')).concurrency);
+  assert.doesNotMatch(JSON.stringify(workflow), /git push|gh release|npm run build|pull_request|schedule|SOURCE_API_KEY/);
 });
 
 test('staging rejects symlinks, nested exports, noncanonical tags and unsafe translations', async () => {

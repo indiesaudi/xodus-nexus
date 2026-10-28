@@ -10,6 +10,9 @@ describe('connectivity verdict', () => {
     expect(classifyConnectivity(true, [false, true], 'now').state).toBe('online');
     expect(classifyConnectivity(true, [true, true], 'now').state).toBe('online');
   });
+  it('never treats an empty probe configuration as evidence of disconnection', () => {
+    expect(classifyConnectivity(true, [], 'now').state).toBe('unknown');
+  });
   it('is offline only when every host is unreachable or hangs', () => {
     const status = classifyConnectivity(true, [false, false], 'now');
     expect(status.state).toBe('offline');

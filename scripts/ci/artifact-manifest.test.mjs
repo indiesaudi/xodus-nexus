@@ -80,3 +80,17 @@ test('launcher candidates bind every AppImage architecture', async () => {
     await assert.rejects(verifyManifest(root), /checksum mismatch/);
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
+
+test('a candidate cannot mix component versions or invent an AppImage architecture', async () => {
+  for (const names of [
+    ['Xodus-Nexus-0.4.0-x86_64.AppImage','Xodus-Nexus-0.4.1-arm64.AppImage'],
+    ['Xodus-Nexus-0.4.0-riscv64.AppImage'],
+    ['Xodus-Nexus.AppImage','Xodus-Nexus-0.4.0-arm64.AppImage'],
+  ]) {
+    const root=await fs.mkdtemp(path.join(os.tmpdir(),'candidate-arch-'));
+    try {
+      for(const name of names)await fs.writeFile(path.join(root,name),'synthetic');
+      await assert.rejects(writeManifest('launcher',root,context),/architectures/);
+    } finally {await fs.rm(root,{recursive:true,force:true});}
+  }
+});

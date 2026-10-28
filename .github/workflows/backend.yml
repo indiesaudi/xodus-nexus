@@ -10,7 +10,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: backend-${{ github.event.pull_request.number || github.ref }}
+  # A source-only push skips all builds, so it must not cancel an active manual
+  # main candidate. Actual main builds still serialize and supersede old builds.
+  group: backend-${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[source-only]') && github.run_id || github.ref }}
   cancel-in-progress: true
 
 jobs:

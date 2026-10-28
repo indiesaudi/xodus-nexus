@@ -2,29 +2,21 @@
 
 <img src="assets/icon.png" width="96" alt="Xodus Nexus" />
 
-# Xodus Nexus for x86_64 and arm64 Linux with offline support
+# Xodus Nexus
 
-Your Microsoft Store PC games on any x86_64 or arm64 Linux device, online and offline.
+Your Microsoft Store PC games, on Linux.
 
-[![CI](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/actions/workflows/ci.yml/badge.svg)](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/actions/workflows/ci.yml)
+[![CI](https://github.com/domsvoboda/xodus-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/domsvoboda/xodus-nexus/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-</div>
+**[🌐 Help translate Xodus Nexus on Tolgee](https://app.tolgee.io/projects/36162)**
 
-> [!IMPORTANT]
-> **This is a fork of [Xodus Nexus](https://github.com/domsvoboda/xodus-nexus) with these additions:**
->
-> - **Offline play** on the device your Microsoft account designates for offline play, like the Xbox app. Each stored license is checked against Microsoft's offline lease at every offline start and is removed when offline play ends.
-> - **Native x86_64 and arm64**: launcher, backend and runtime for both. Tested on an AYN Odin 3 with ArmadaOS.
-> - **Background service**: Steam's **Exit game** closes the game gracefully and lets cloud saves finish uploading.
-> - **Any Proton per game**: choose a Proton for each game in Steam, or the **Xodus Nexus** compatibility tool.
->
-> These changes are proposed upstream ([#373](https://github.com/domsvoboda/xodus-nexus/pull/373), [#360](https://github.com/domsvoboda/xodus-nexus/pull/360), [#374](https://github.com/domsvoboda/xodus-nexus/pull/374)) but are not merged yet. This fork publishes its own releases, and an installation from here also updates from here. For the official builds, use [domsvoboda/xodus-nexus](https://github.com/domsvoboda/xodus-nexus).
+</div>
 
 > [!CAUTION]
 > **Xodus Nexus is an independent, unofficial project built on Xodus. It is not an official project or release from the upstream Xodus developers.**
 >
-> Please report issues with this fork in [its own issue tracker](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/issues), not in the Xodus Nexus or upstream Xodus trackers.
+> Please report all issues encountered with **Xodus Nexus** only in the [Xodus Nexus repository](https://github.com/domsvoboda/xodus-nexus/issues), not in the upstream Xodus issue tracker or support channels.
 >
 > Nexus includes its own changes, so a problem in Nexus does not necessarily indicate a problem in upstream Xodus.
 
@@ -40,7 +32,7 @@ for supported games.
 
 ## Community translations
 
-Translations are shared with upstream Xodus Nexus. To help translate, open its
+Help make Nexus available in your language. Open our
 [public Tolgee project](https://app.tolgee.io/projects/36162), sign in and suggest
 translations for the launcher interface. No coding or GitHub access is needed.
 Maintainers review suggestions before including them in a release. Missing a
@@ -51,78 +43,23 @@ language? Request it in a [GitHub issue](https://github.com/domsvoboda/xodus-nex
 
 ## Install
 
-Works on x86_64 and arm64 Linux PCs and handhelds. On a handheld, do the first setup in **Desktop Mode**.
+Download the latest Linux AppImage from [Releases](https://github.com/domsvoboda/xodus-nexus/releases), make it executable and open it. Stable releases currently ship for x86_64. Experimental ARM64 support requires matching native launcher, backend and runtime builds, compatible graphics drivers and FEX for x86 Windows games.
 
-1. Open a terminal (Konsole) and run:
+For an application-menu installation on supported distributions:
 
-   ```sh
-   curl -fsSL https://raw.githubusercontent.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/main/scripts/install.sh | bash
-   ```
+```sh
+curl -fsSL https://raw.githubusercontent.com/domsvoboda/xodus-nexus/main/scripts/install.sh | bash
+```
 
-   The installer picks the build for your CPU. On read-only systems such as SteamOS or ArmadaOS, the system-package step only prints a warning; the AppImage brings what it needs.
-2. Start **Xodus Nexus** from the application menu. The launcher installs the **Nexus backend** for your CPU in the background.
-3. In **Settings**, choose **Install Nexus runtime**.
-4. Sign in with your Microsoft account. If the wallet asks to be set up, see [Wallet setup and unlocking](#wallet-setup-and-unlocking). A valid purchase or subscription is required.
-5. Install games from **Store** or **My Library**. To play from Game Mode, choose **Add to Steam** in a game's menu, or **Add Nexus to Steam** in Settings.
-
-To install manually, download the AppImage for your CPU (`x86_64` or `arm64`) from [Releases](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/releases), make it executable and open it.
+On first startup, the launcher installs and verifies the **Nexus backend** in
+the background so you can sign in during setup. Install the **Nexus runtime**
+from **Settings** before launching games. A valid purchase or subscription is required.
 
 If passkey sign-in gets stuck, choose **Continue in browser** in the sign-in
 window. This option requires Google Chrome, either a native installation or the
 Flatpak version available through Discover. Other browsers are not supported.
 
 [Setup guide and SteamOS requirements](https://github.com/domsvoboda/xodus-nexus/wiki/Getting-started)
-
-## Upgrade
-
-- **From launcher 0.3.15:** open **Settings**, choose **Check for updates**, then **Update launcher** and restart Nexus. Then update the **backend** in Settings; the runtime stays the same. Update the launcher first: with the new backend, launcher 0.3.15 cannot start games.
-- **From launcher 0.3.14 or older:** these versions cannot update themselves, because this fork's repository was renamed. Run the install command from [Install](#install) again. Your games, sign-in and settings are kept.
-- **After upgrading:**
-  - Choose **Add to Steam** again for each game you start from Steam. This updates the shortcut so Steam's compatibility-tool choice and launch wrappers reach Nexus. It keeps the shortcut's artwork and settings.
-  - Start each game you want to play offline once while online. Offline licenses stored by earlier versions are not used anymore, and each game stores a new one on its first online start.
-  - Optional: turn on **Settings → Advanced → Background service** for a graceful **Exit game** from Steam.
-
-## Offline play
-
-Microsoft allows offline play on one device per account, the **designated offline device**, and lets you change it three times a year. This follows [Microsoft's offline-play rules](https://support.xbox.com/en-GB/help/games-apps/game-setup-and-play/play-games-offline-on-windows-10-using-offline-mode).
-
-1. While online, open **Settings → Offline permissions** and turn on **Use this device to play games offline**. This turns offline play off on your other devices. The card shows how many changes remain this year.
-2. Start each game once while online. Microsoft then issues this device an offline lease of up to 30 days for that game, renewed at every online start.
-3. Without a connection, the header shows **Offline**, and those games start with their stored license. Online features are unavailable, and saves stay on the device until the next online session.
-
-Nexus checks each stored license against Microsoft's lease at every offline start. It removes stored licenses and offline sign-ins when:
-
-- you turn offline play off, or another device becomes the offline device and this device notices once it is back online;
-- another account signs in, or you sign out;
-- Microsoft refuses a game's license (that game), or reports the Store device limit (all games).
-
-A device that stays offline cannot learn about these changes. Its offline access still ends when the lease Microsoft issued expires.
-
-## Play from Steam
-
-- **Add to Steam** creates a Non-Steam shortcut with artwork. Steam can keep running, including in Game Mode. Native Linux Steam is required; Flatpak Steam is not supported yet.
-- **Background service** (**Settings → Advanced**): Steam shortcuts start through a small client and a systemd user service (no root). **Exit game** in Steam then closes the game gracefully and lets cloud saves finish uploading. To check it, run `journalctl --user -u 'xodus-nexus-*'`.
-- **Choose the Proton per game** (needs the background service): Nexus adds **Xodus Nexus** to Steam's **Properties → Compatibility** menu. Steam lists it after a restart. **Xodus Nexus** and **Default** run the game on the Nexus runtime. Any other Proton runs it there, and Nexus adds only what Xbox PC games need: the GDK runtime, Xbox service networking, the PlayFab save adapter, the Gaming Services version and the game language. Graphics (DXVK, vkd3d) stay that Proton's own.
-- Launch wrappers in front of Steam's command apply to the game, such as ArmadaOS's per-game settings (`armada-game-launch`), `gamemoderun` or `VAR=value`.
-
-### Set the Steam launch options by hand
-
-**Add to Steam** sets these for you. To create or repair a shortcut yourself, add a Non-Steam game with these settings:
-
-| Field | Value |
-| --- | --- |
-| Target | `/bin/sh` |
-| Start in | the game's installation folder (any folder works) |
-| Launch options | `"<home>/.config/xodus-nexus/shortcuts/launch-game" "<game id>" %command%` |
-| Launch options on ArmadaOS | `"<home>/.config/xodus-nexus/shortcuts/launch-game" "<game id>" /usr/libexec/armada/armada-game-launch %command%` |
-
-Replace `<home>` with your home folder, for example `/home/deck`, and keep the quotes. `%command%` must come last; wrappers such as `gamemoderun` go right before it. To list your games and their ids:
-
-```sh
-python3 -c 'import json, os; [print(g["id"], g["title"]) for g in json.load(open(os.path.expanduser("~/.config/xodus-nexus/launcher-state.json")))["games"]]'
-```
-
-For example: `"/home/deck/.config/xodus-nexus/shortcuts/launch-game" "74c7642782377a56" %command%`. To use another Proton, pick it under the shortcut's **Properties → Compatibility**. To use the Nexus runtime, choose **Xodus Nexus** or leave the setting off.
 
 ## Use
 
@@ -138,13 +75,29 @@ For example: `"/home/deck/.config/xodus-nexus/shortcuts/launch-game" "74c7642782
 - Removing a game can keep its files or permanently delete its installation folder without using Trash. Saves inside that folder are deleted too; saves elsewhere are not affected.
 - Game settings offer an optional **DualSense compatibility mode** if a standard DualSense is not detected. It applies only to that game and may disable advanced haptics and adaptive triggers.
 - Choose **Add to Steam** in the game menu, or **Add Nexus to Steam** in Settings, to create a Non-Steam shortcut with available artwork. Steam can stay running, including in Game Mode. Requires native Linux Steam; Flatpak Steam is not yet supported.
-- **Settings → Advanced → Background service** runs the Nexus game daemon as a systemd user service (`~/.config/systemd/user`, socket-activated, no root). Steam shortcuts then start through a small client: launches skip the Electron start-up, and Exit game in Steam ends only that client while the daemon closes the game and lets cloud-save sync finish. Check it with `journalctl --user -u xodus-nexus-<profile>.service`.
-- **Settings → Offline permissions** shows whether this device is your account's offline device and how many changes remain this year, and changes it after a confirmation. See [Offline play](#offline-play).
 - Update the launcher, backend and runtime in **Settings**.
 - **Settings → Interface language** selects a bundled translation independently of game language and Store region. Missing translations fall back to English.
 - **Settings → Downloads** sets a combined game download speed limit in MiB/s (0 means unlimited). A supporting Nexus backend is required; saving the limit also applies it to active downloads.
 - **Settings → Shader cache** sets the per-game Mesa/NVIDIA driver cache limit, 4 GiB by default. Changes apply on the next game launch; explicit environment overrides take precedence.
 - For account, library or installation errors, use **Settings → Xodus backend → Open backend diagnostic log**. The local log contains safe error codes and operation results, not credentials. Review it before sharing.
+
+## In-game overlay
+
+Enable **Settings → Nexus Overlay** to open friends, chats and party controls
+while playing. Record a shortcut, choose the screen edge and save the settings.
+The overlay requires Python 3, PyGObject, GTK 3 and WebKitGTK 4.1. Your desktop
+may ask you to approve the shortcut on Wayland; fullscreen and monitor detection
+depend on the desktop. The overlay is optional and disabled by default.
+
+## Offline play
+
+Use **Settings → Offline permissions** while online to designate this PC for
+offline play. Microsoft allows only one offline PC per account; changing it
+removes the designation from the previous device and is subject to the limit
+shown before confirmation. Launch each game online once afterwards. Supported
+games can then start without a connection while their Microsoft-issued lease
+remains valid. A compatible backend and runtime are required; online-only games
+still need their servers. See [Xbox offline-play guidance](https://support.xbox.com/en-GB/help/games-apps/game-setup-and-play/play-games-offline-on-windows-10-using-offline-mode).
 
 ## Wallet setup and unlocking
 
@@ -164,7 +117,7 @@ longer use, then retry in Nexus. You do not need to sign out or reset the wallet
 Other license errors can have different causes.
 
 [Documentation](https://github.com/domsvoboda/xodus-nexus/wiki) ·
-[Report an issue](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/issues)
+[Report an issue](https://github.com/domsvoboda/xodus-nexus/issues)
 
 ## How it works
 
@@ -181,9 +134,6 @@ the shared Nexus Runtime. Wine provides Windows compatibility; XGameRuntime
 connects supported Xbox and Microsoft Store game APIs to the Nexus backend.
 DXVK and VKD3D-Proton translate supported Direct3D graphics to Vulkan.
 
-> [!NOTE]
-> This fork still publishes the earlier Nexus runtime (`runtime-11.0-20261025-g33cf5423`, x86_64 and aarch64), built on [Xodus Proton](https://github.com/xodus-gaming/Proton) and the previous C XGameRuntime. Upstream's C++ runtime is not yet available for arm64; the fork will move to it once it is. Offline sign-in in the C++ runtime is proposed in [nexus-xgameruntime#11](https://github.com/domsvoboda/nexus-xgameruntime/pull/11).
-
 Install or update the complete runtime through **Settings**. Its Wine and
 XGameRuntime components are built together at matching revisions, so there is
 no need to install the individual forks separately. All games use the same
@@ -196,6 +146,7 @@ but have not been verified and may encounter compatibility issues.
 
 | Game | Playable | Status |
 | --- | --- | --- |
+| Age of Empires IV | Startup verified | Unreleased runtime: starts successfully; online play unverified. |
 | Gears of War: E-Day | Yes | Playable online; Xbox playing status works. |
 | Deep Rock Galactic | Yes | Playable online. |
 | Minecraft Dungeons | Yes | Playable online with launcher 0.3.5; [ownership failures](https://github.com/domsvoboda/xodus-nexus/issues/80) also reported on other setups. |

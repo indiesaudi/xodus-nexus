@@ -37,4 +37,11 @@ describe('offline permission backend calls', () => {
     const garbage = vi.fn(async () => ({ code: 0, output: 'no json here', log: ['NEXUS_OFFLINE_PC_V1 ok 200'] }));
     await expect(readOfflinePermissions(garbage)).rejects.toThrow('unreadable');
   });
+  it('does not equate a zero exit status with an applied designation change', async () => {
+    for(const response of [ok(false,2,false),ok(false,2,true)]) {
+      const run=vi.fn(async()=>({code:0,output:response,log:[]}));
+      await expect(changeOfflinePermissions(run,true)).rejects.toThrow('did not apply');
+      expect(run).toHaveBeenCalledOnce();
+    }
+  });
 });

@@ -1,9 +1,8 @@
 import { constants, promises as fs } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { profileIdOf } from '../shared/profile-id.js';
 import type { Game } from '../shared/types.js';
-import { ARMADA_LAUNCH_WRAPPER, steamArgument, steamCommandOptions, type SteamLaunch } from './steam-shortcuts.js';
+import { steamArgument, type SteamLaunch } from './steam-shortcuts.js';
 
 export type ShortcutDestination = 'desktop' | 'applications';
 const validId = (id: string) => /^[a-f0-9]{16}$/.test(id);
@@ -27,8 +26,6 @@ export function shortcutArguments(argv: string[]): { gameId?: string; profile?: 
   const result: { gameId?: string; profile?: string } = {};
   for (let index = 0; index < argv.length; index++) {
     const flag = argv[index];
-    // The launcher wrapper dispatches these to the Node entry points; reaching Electron means a stale wrapper.
-    if (flag === '--nexus-client' || flag === '--nexus-daemon') throw new Error('This Nexus build cannot run the background-service mode. Update the launcher and recreate the shortcut.');
     if (flag !== '--launch-game' && flag !== '--nexus-profile') continue;
     const value = argv[++index];
     if (flag === '--launch-game') {
@@ -69,14 +66,23 @@ export function shortcutInstanceRequest(data: unknown, currentProfile: string): 
   return result;
 }
 
-interface Locations { userData: string; desktop: string; applications: string; launcher?: string; icon: string; armadaWrapper?: string }
+interface Locations { userData: string; desktop: string; applications: string; launcher?: string; icon: string }
+export async function shortcutLauncherPath(appImage:string,argv0?:string):Promise<string>{
+  const resolved=await fs.realpath(appImage);
+  const stable=path.join(path.dirname(appImage),'Xodus-Nexus.AppImage');
+  try{if((await fs.lstat(stable)).isSymbolicLink()&&await fs.realpath(stable)===resolved)return stable;}catch{}
+  if(argv0&&path.isAbsolute(argv0)&&!/[\0\r\n]/.test(argv0)){
+    try{if(await fs.realpath(argv0)===resolved)return argv0;}catch{}
+  }
+  return appImage;
+}
 export class GameShortcuts {
   private entry?: string;
   private icon?: string;
   private nexusEntry?: string;
   private readonly profileId: string;
   constructor(private locations: Locations) {
-    this.profileId = profileIdOf(locations.userData);
+    this.profileId = createHash('sha256').update(path.resolve(locations.userData)).digest('hex').slice(0, 12);
   }
   get available(): boolean { return Boolean(this.entry); }
   get reason(): string | undefined { return this.available ? undefined : 'Shortcuts require an installed Linux launcher or AppImage with a persistent executable path.'; }
@@ -105,17 +111,14 @@ export class GameShortcuts {
   }
   async initialize(): Promise<void> {
     if (!this.locations.launcher) return;
-    const launcher = await fs.realpath(this.locations.launcher);
+    const launcher = this.locations.launcher;
     if (/[\0\r\n]/.test(launcher) || !path.isAbsolute(launcher) || !(await fs.stat(launcher)).isFile()) throw new Error('Invalid launcher executable.');
     await fs.access(launcher, constants.X_OK);
     const directory = path.join(this.locations.userData, 'shortcuts');
     await this.directory(directory);
     const entry = path.join(directory, 'launch-game');
     // No tokens or runtime paths in shortcuts. Refresh after moving/updating the app.
-    // The game entry is the thin client: it asks the background daemon to run the
-    // game and falls back to this launcher when the daemon is unavailable. The
-    // wrapper strips Steam's overlay from LD_PRELOAD, so keep the original for the game.
-    const body = (game: boolean) => `#!/bin/sh\n# ${this.marker}\n${game ? 'export XODUS_NEXUS_STEAM_LD_PRELOAD="${LD_PRELOAD-}"\n' : ''}unset APPIMAGE APPDIR ARGV0 OWD ELECTRON_RUN_AS_NODE VITE_DEV_SERVER_URL XODUS_DEMO XODUS_DEMO_TOUR XODUS_DEMO_CAPTURE_DIR XODUS_SMOKE_SCREENSHOT\nexec ${shellQuote(launcher)}${game ? ' --nexus-client' : ''} --nexus-profile ${shellQuote(this.locations.userData)}${game ? ' --launch-game' : ''} "$@"\n`;
+    const body = (game: boolean) => `#!/bin/sh\n# ${this.marker}\nunset APPIMAGE APPDIR ARGV0 OWD ELECTRON_RUN_AS_NODE VITE_DEV_SERVER_URL XODUS_DEMO XODUS_DEMO_TOUR XODUS_DEMO_CAPTURE_DIR XODUS_SMOKE_SCREENSHOT\nexec ${shellQuote(launcher)} --nexus-profile ${shellQuote(this.locations.userData)}${game ? ' --launch-game' : ''} "$@"\n`;
     await this.write(entry, body(true), 0o700, `# ${this.marker}`);
     const nexusEntry = path.join(directory, 'launch-nexus');
     await this.write(nexusEntry, body(false), 0o700, `# ${this.marker}`);
@@ -190,10 +193,8 @@ export class GameShortcuts {
     if (!this.entry || !this.icon || !this.nexusEntry) throw new Error(this.reason);
     if (game && (game.installState !== 'ready' || !validId(game.id))) throw Error('Only installed, ready games can be added to Steam.');
     const entry = game ? this.entry : this.nexusEntry;
-    // ArmadaOS applies per-game settings through its wrapper; keep it, after the Nexus script.
-    const armada = await fs.access(this.locations.armadaWrapper ?? ARMADA_LAUNCH_WRAPPER, constants.X_OK).then(() => true, () => false);
     return { title: game ? game.title.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 256) || 'Xodus Nexus game' : 'Xodus Nexus',
-      executable: steamArgument('/bin/sh'), options: game ? steamCommandOptions(steamArgument(entry) + ' ' + steamArgument(game.id), armada) : steamArgument(entry),
+      executable: steamArgument('/bin/sh'), options: steamArgument(entry) + (game ? ' ' + steamArgument(game.id) : ''),
       directory: path.dirname(entry), identity: this.profileId + ':' + (game?.id ?? 'launcher'),
       icon: game ? await this.gameIcon(game.id, png) : this.icon };
   }

@@ -1,0 +1,83 @@
+name: Accept checked translation suggestions
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Preview, accept, or accept and mark technically checked translations Reviewed'
+        type: choice
+        options: [preview, review-texts, accept, accept-and-review, preview-reviewed-plan, apply-reviewed-plan]
+        default: preview
+      languages:
+        description: 'Optional comma-separated target language tags, e.g. fr,es. Empty selects all targets.'
+        type: string
+        default: ''
+      review_digest:
+        description: 'Optional SHA256 from a reviewed preview. Stops before writes if eligible texts changed.'
+        type: string
+        default: ''
+      exclude:
+        description: 'Optional comma-separated language:key exclusions from language review, e.g. fr:auth.browser'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  # Share the lock with English source sync, not just other acceptance jobs.
+  group: tolgee-english
+  cancel-in-progress: false
+
+jobs:
+  suggestions:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Check acceptance tooling without credentials
+        run: node --test scripts/ci/tolgee-accept.test.mjs scripts/ci/tolgee-review-plan.test.mjs
+      - name: Process suggestions
+        env:
+          TOLGEE_REVIEW_API_KEY: ${{ secrets.TOLGEE_REVIEW_API_KEY }}
+          REVIEW_MODE: ${{ inputs.mode }}
+          REVIEW_LANGUAGES: ${{ inputs.languages }}
+          REVIEW_DIGEST: ${{ inputs.review_digest }}
+          REVIEW_EXCLUDE: ${{ inputs.exclude }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$REVIEW_MODE" = preview-reviewed-plan ] || [ "$REVIEW_MODE" = apply-reviewed-plan ]; then
+            plan_args=("$REVIEW_DIGEST")
+            if [ "$REVIEW_MODE" = apply-reviewed-plan ]; then plan_args+=(--apply); fi
+            node scripts/tolgee-review-plan.mjs "${plan_args[@]}" | tee tolgee-suggestion-report.json
+            exit 0
+          fi
+          args=()
+          case "$REVIEW_MODE" in
+            preview) ;;
+            review-texts) args+=(--texts) ;;
+            accept) args+=(--apply) ;;
+            accept-and-review) args+=(--apply --reviewed) ;;
+            *) echo 'Invalid mode' >&2; exit 1 ;;
+          esac
+          if [ -n "$REVIEW_LANGUAGES" ]; then args+=(--languages "$REVIEW_LANGUAGES"); fi
+          if [ -n "$REVIEW_DIGEST" ]; then args+=(--review-digest "$REVIEW_DIGEST"); fi
+          if [ -n "$REVIEW_EXCLUDE" ]; then args+=(--exclude "$REVIEW_EXCLUDE"); fi
+          node scripts/tolgee-accept.mjs "${args[@]}" | tee tolgee-suggestion-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tolgee-suggestion-report
+          path: tolgee-suggestion-report.json
+          if-no-files-found: ignore
+          retention-days: 14

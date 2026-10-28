@@ -51,7 +51,9 @@ try {
       const metadata = JSON.parse(await fs.readFile(path.join(directory, file.name), 'utf8'));
       if (!/^\d+\.\d+\.\d+$/.test(lock.version) || metadata.version !== lock.version || metadata.commit !== lock.commit ||
           metadata.recipeSha256 !== recipeHash || metadata.compatibility !== lock.compatibility ||
-          !['x64', 'arm64'].includes(metadata.arch) || file.name !== metadata.archive?.replace('.tar.xz', '.manifest.json')) throw Error('Backend recipe provenance mismatch');
+          !['x64', 'arm64'].includes(metadata.arch) || metadata.platform !== 'linux' || metadata.authUi !== 'electron' ||
+          metadata.archive !== `xodus-nexus-backend-${lock.version}-linux-${{x64:'x86_64',arm64:'aarch64'}[metadata.arch]}.tar.xz` ||
+          file.name !== metadata.archive?.replace('.tar.xz', '.manifest.json')) throw Error('Backend recipe provenance mismatch');
       const checksumFile = manifest.files.find(entry => entry.name === metadata.archive?.replace('.tar.xz', '.sha512sum'));
       if (!checksumFile || (await fs.readFile(path.join(directory, checksumFile.name), 'utf8')).trim() !== `${metadata.archiveSha512}  ${metadata.archive}`) throw Error('Backend archive identity mismatch');
     }

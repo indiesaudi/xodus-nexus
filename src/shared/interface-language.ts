@@ -16,6 +16,16 @@ export function resolveInterfaceLanguage(preference: unknown, system: readonly s
   const preferences = preference === SYSTEM_LANGUAGE || !canonicalLanguage(preference) ? system : [String(preference)];
   for (const candidate of preferences) {
     let language = canonicalLanguage(candidate);
+    // Prefer an exact locale, then negotiate Chinese by script rather than
+    // falling back from zh-TW/zh-HK directly to an unavailable generic zh.
+    if (language && supported.has(language)) return language;
+    if (language?.split('-')[0] === 'zh') {
+      const script = new Intl.Locale(language).maximize().script;
+      const alternatives = script === 'Hant' ? ['zh-Hant', 'zh-TW', 'zh-HK']
+        : script === 'Hans' ? ['zh-Hans', 'zh-CN', 'zh-SG'] : [];
+      const match = alternatives.find(value => supported.has(value));
+      if (match) return match;
+    }
     while (language) {
       if (supported.has(language)) return language;
       const separator = language.lastIndexOf('-');

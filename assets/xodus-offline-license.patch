@@ -1,5 +1,5 @@
 diff --git a/crates/xodus-cli/src/commands.rs b/crates/xodus-cli/src/commands.rs
-index 1e0e96d..c2e9f7e 100644
+index 3a0793c..4f1b211 100644
 --- a/crates/xodus-cli/src/commands.rs
 +++ b/crates/xodus-cli/src/commands.rs
 @@ -5,6 +5,7 @@ pub mod extract_eappx;
@@ -216,10 +216,10 @@ index 0000000..66a3591
 +    }
 +}
 diff --git a/crates/xodus-cli/src/commands/run.rs b/crates/xodus-cli/src/commands/run.rs
-index 1ec9cb9..e0335b7 100644
+index c51d1c2..a02a733 100644
 --- a/crates/xodus-cli/src/commands/run.rs
 +++ b/crates/xodus-cli/src/commands/run.rs
-@@ -535,6 +535,7 @@ pub async fn run(
+@@ -708,6 +708,7 @@ pub async fn run(
      materialize_exe: bool,
      materialize_chain: bool,
      market: Option<String>,
@@ -227,8 +227,8 @@ index 1ec9cb9..e0335b7 100644
  ) -> ExitCode {
      let mut lfiles: HashMap<String, SegmentFile> = HashMap::new();
  
-@@ -572,11 +573,13 @@ pub async fn run(
-         lfiles.extend(sfiles);
+@@ -755,11 +756,13 @@ pub async fn run(
+         merge_plain_launch_files(&mut lfiles, plain);
      }
  
 +    let license_cache = license_cache.map(PathBuf::from);
@@ -242,10 +242,10 @@ index 1ec9cb9..e0335b7 100644
      .await;
      if let Err(err) = license {
 diff --git a/crates/xodus-cli/src/commands/streaming.rs b/crates/xodus-cli/src/commands/streaming.rs
-index b528b14..0a11b6c 100644
+index 87a1a59..b89f20c 100644
 --- a/crates/xodus-cli/src/commands/streaming.rs
 +++ b/crates/xodus-cli/src/commands/streaming.rs
-@@ -425,6 +425,8 @@ where
+@@ -428,6 +428,8 @@ where
          tokens,
          remote_xvd.content_id().to_string(),
          market.unwrap_or("neutral".to_string()),
@@ -1118,7 +1118,7 @@ index 0000000..5bfeb0e
 +    );
 +}
 diff --git a/crates/xodus-cli/src/main.rs b/crates/xodus-cli/src/main.rs
-index ea6f6d9..4222e63 100644
+index 63a8673..1f91264 100644
 --- a/crates/xodus-cli/src/main.rs
 +++ b/crates/xodus-cli/src/main.rs
 @@ -8,6 +8,7 @@ use xodus::tokens::TokenManager;
@@ -1126,10 +1126,10 @@ index ea6f6d9..4222e63 100644
  mod commands;
  mod license;
 +mod license_cache;
+ mod installation_state;
  mod package;
  mod package_plan;
- #[cfg(feature = "native-webview")]
-@@ -165,6 +166,8 @@ enum SubCommand {
+@@ -172,6 +173,8 @@ enum SubCommand {
          materialize_chain: bool,
          #[arg(short, long)]
          market: Option<String>,
@@ -1138,7 +1138,7 @@ index ea6f6d9..4222e63 100644
      },
      #[command(about = "Generate or decrypt base64-encoded CLEP challenge data")]
      Clep {
-@@ -175,6 +178,13 @@ enum SubCommand {
+@@ -182,6 +185,13 @@ enum SubCommand {
      SpLicense {
          block: String,
      },
@@ -1152,7 +1152,7 @@ index ea6f6d9..4222e63 100644
  }
  
  #[derive(Subcommand)]
-@@ -422,6 +432,7 @@ async fn main() -> ExitCode {
+@@ -431,6 +441,7 @@ async fn main() -> ExitCode {
              materialize_exe,
              materialize_chain,
              market,
@@ -1160,7 +1160,7 @@ index ea6f6d9..4222e63 100644
          } => {
              commands::run::run(
                  &client,
-@@ -432,6 +443,7 @@ async fn main() -> ExitCode {
+@@ -441,6 +452,7 @@ async fn main() -> ExitCode {
                  materialize_exe,
                  materialize_chain,
                  market,
@@ -1168,7 +1168,7 @@ index ea6f6d9..4222e63 100644
              )
              .await
          }
-@@ -443,6 +455,9 @@ async fn main() -> ExitCode {
+@@ -452,6 +464,9 @@ async fn main() -> ExitCode {
              ClepAction::Decrypt { data } => commands::clep::decrypt(data),
          },
          SubCommand::SpLicense { block } => commands::splicense::run(block),

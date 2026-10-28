@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { BACKEND_ARCH_SUFFIX, currentArch, type NexusArch } from './arch.js';
 
-export const BACKEND_REPOSITORY = 'indiesaudi/xodus-nexus-x86-arm64-offline-support';
+export const BACKEND_REPOSITORY = 'domsvoboda/xodus-nexus';
 export const backendAssets = fileURLToPath(new URL('../../assets/', import.meta.url));
 const lockBytes = readFileSync(new URL('../../assets/backend-source.lock.json', import.meta.url));
 export const backendLock = JSON.parse(lockBytes.toString()) as {
@@ -32,14 +32,14 @@ export interface BackendPackageManifest {
   authUi: 'electron';
 }
 
-export function validateBackendManifest(value: unknown): BackendPackageManifest {
+export function validateBackendManifest(value: unknown, arch: NexusArch = currentArch()): BackendPackageManifest {
   const item = value as BackendPackageManifest | undefined;
   if (!item || item.schema !== 1 || item.authUi !== 'electron' || !/^\d+\.\d+\.\d+$/.test(item.version ?? '') ||
       compareVersions(item.version, minimumBackendVersion) < 0 ||
       !/^[a-f0-9]{40}$/.test(item.commit ?? '') || !/^[a-f0-9]{64}$/.test(item.recipeSha256 ?? '') ||
       typeof item.compatibility !== 'string' || !item.compatibility.trim() ||
-      item.platform !== 'linux' || item.arch !== currentArch() ||
-      item.archive !== `${backendPackageName(item.version)}.tar.xz` || !/^[a-f0-9]{128}$/.test(item.archiveSha512 ?? '') ||
+      item.platform !== 'linux' || item.arch !== arch ||
+      item.archive !== `${backendPackageName(item.version, arch)}.tar.xz` || !/^[a-f0-9]{128}$/.test(item.archiveSha512 ?? '') ||
       !item.files || Object.keys(item.files).sort().join(',') !== 'LICENSE,xodus-cli,xodus-service' ||
       Object.values(item.files).some(hash => typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash))) {
     throw new Error('The backend package manifest is not a valid compatible release.');

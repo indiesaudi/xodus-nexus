@@ -14,6 +14,7 @@ function fixture(code = 0) {
     ensureIdle: vi.fn(), requireBackend: vi.fn(() => '/synthetic/backend'), randomUUID: () => 'synthetic',
     accountRefresh: { invalidate: vi.fn() }, accountLibrary: { reset: vi.fn() },
     xboxSocial: { close: vi.fn() },
+    nativeSocialBeforeAuth:[],resetNativeSocial:vi.fn(),
     gameActivities: { select: vi.fn() }, gameAchievements: { select: vi.fn() },
     authState: { running: false, stored: true }, emitSnapshot: vi.fn(),
     backend: { current: { capabilities: { externalAuth: true } } },

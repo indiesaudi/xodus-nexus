@@ -77,10 +77,10 @@ index 66a3591..95eefcb 100644
      fn offline_pc_summary_keeps_only_allowlisted_fields_and_drops_the_sentinel_date() {
          let body = br#"{"offlinePermissions":{"enabled":true,"requestData":{"success":true,"maxTogglesPerPeriod":3,"remainingTogglesForPeriod":1,"periodLengthDays":365,"nextTimeToAdd":"1601-01-01T00:00:00+00:00"},"extra":"ignored"}}"#;
 diff --git a/crates/xodus-cli/src/commands/run.rs b/crates/xodus-cli/src/commands/run.rs
-index b25a7d2..9f0ae28 100644
+index 2a5b934..0b866a6 100644
 --- a/crates/xodus-cli/src/commands/run.rs
 +++ b/crates/xodus-cli/src/commands/run.rs
-@@ -526,6 +526,19 @@ async fn prepare(_lfiles: &HashMap<String, SegmentFile>) -> (impl AsyncFnOnce(),
+@@ -537,6 +537,19 @@ async fn prepare(_lfiles: &HashMap<String, SegmentFile>) -> (impl AsyncFnOnce(),
      (async || {}, "".to_owned())
  }
  
@@ -100,7 +100,7 @@ index b25a7d2..9f0ae28 100644
  pub async fn run(
      client: &reqwest::Client,
      tokens: &TokenManager,
-@@ -736,11 +749,22 @@ pub async fn run(
+@@ -753,11 +766,22 @@ pub async fn run(
          .env("WINE_DLL_FILE_MAP", env_value)
          .env("WINE_EXE_FILE_MAP", exe_env_value);
      if offline {
@@ -126,7 +126,7 @@ index b25a7d2..9f0ae28 100644
      if offline || crate::license::OFFLINE_LICENSE_USED.load(std::sync::atomic::Ordering::Relaxed) {
          eprintln!("Microsoft is unreachable; skipping PlayFab authorisation (the runtime signs in with its cached identity)");
      } else {
-@@ -1123,4 +1147,14 @@ mod tests {
+@@ -1191,4 +1215,14 @@ mod tests {
          symlink(outside.path(), root.path().join("External")).unwrap();
          assert!(resolve_package_file(root.path(), "external/EXTERNAL.exe").is_err());
      }

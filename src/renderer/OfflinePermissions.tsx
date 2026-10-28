@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CircleAlert, CloudOff, LoaderCircle, RefreshCw } from 'lucide-react';
 import type { OfflinePermissions } from '../shared/types';
 import { offlinePermissionLimitText } from '../shared/offline-permissions';
@@ -24,13 +24,14 @@ export function OfflinePermissionsView({ status, busy, error, onToggle, onRetry 
 }) {
   const exhausted = status?.remainingToggles === 0;
   // The Xbox app still lets a designated PC turn the setting off; only turning it on needs a change left.
-  const locked = !status || busy || (exhausted && !status.enabled);
+  const locked = !status || busy || ((exhausted || status.launchSupported === false) && !status.enabled);
   return <section className="settings-card offline-permissions-card">
     <div className="settings-heading"><div className="settings-icon"><CloudOff /></div><div><span className="overline">{ui('offline.overline')}</span><h2>{ui('offline.heading')}</h2><p>{ui('offline.description')}</p></div>
       {status ? <span className={`status-label ${status.enabled ? 'ready' : 'off'}`}>{status.enabled ? ui('offline.on') : ui('offline.off')}</span> : null}</div>
     {error ? <div className="alert amber"><CircleAlert /><span>{uiText(error)}</span></div> : null}
     {!status && !error ? <p className="offline-permissions-note"><LoaderCircle className="spin" /> {ui('offline.checking')}</p> : null}
     {status ? <>
+      {status.launchSupported === false ? <div className="alert amber"><CircleAlert /><span>{ui('offline.compatible_components_required')}</span></div> : null}
       <label className="tool-checkbox offline-permissions-toggle" data-testid="offline-permissions-toggle">
         <input type="checkbox" checked={status.enabled} disabled={locked} onChange={event => onToggle(event.target.checked)} />
         <span>{ui('offline.toggle')}</span>
@@ -43,6 +44,8 @@ export function OfflinePermissionsView({ status, busy, error, onToggle, onRetry 
 }
 
 export function OfflinePermissionsCard({ toast, signedIn }: { toast: (value: Toast) => void; signedIn: boolean }) {
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const confirm = useConfirmation();
   const [status, setStatus] = useState<OfflinePermissions>();
   const [error, setError] = useState<string>();
@@ -62,17 +65,19 @@ export function OfflinePermissionsCard({ toast, signedIn }: { toast: (value: Toa
 
   async function toggle(enable: boolean) {
     if (!status || busy) return;
-    if (!await confirm(offlinePermissionConfirmation(status, enable))) return;
+    if (!await confirm(offlinePermissionConfirmation(status, enable)) || !mounted.current) return;
     setBusy(true); setError(undefined);
     try {
       const next = await window.launcher.setOfflinePermissions(enable);
+      if (!mounted.current) return;
       setStatus(next);
       const remaining = next.remainingToggles === undefined ? '' : ` ${uiText(offlinePermissionLimitText(next))}`;
       toast({ kind: 'success', message: `${enable ? ui('offline.enabled_toast') : ui('offline.disabled_toast')}${remaining}` });
     } catch (err) {
+      if (!mounted.current) return;
       setError(err instanceof Error ? err.message : String(err));
       setRevision(value => value + 1);
-    } finally { setBusy(false); }
+    } finally { if (mounted.current) setBusy(false); }
   }
 
   return <OfflinePermissionsView status={status} busy={busy} error={error} onToggle={(enable) => void toggle(enable)} onRetry={() => setRevision(value => value + 1)} />;

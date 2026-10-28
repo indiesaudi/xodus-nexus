@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile, access } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile, access, symlink, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -30,5 +30,18 @@ describe('offline identity caches', () => {
     await expect(access(saves)).resolves.toBeUndefined();
     expect(await removeOfflineIdentityCaches(root)).toBe(0);
     expect(await removeOfflineIdentityCaches(path.join(root, 'missing'))).toBe(0);
+  });
+
+  it('never traverses a prefix or intermediate symlink into another installation', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'nexus-identity-links-')); created.push(root);
+    const outside = await mkdtemp(path.join(tmpdir(), 'nexus-identity-outside-')); created.push(outside);
+    const cache = offlineIdentityCacheDirectory(outside);
+    await mkdir(cache, { recursive: true }); await writeFile(path.join(cache, 'identity.txt'), 'keep');
+    await mkdir(path.join(root, 'compatdata'));
+    await symlink(outside, path.join(root, 'compatdata', 'game-a'));
+    const other = path.join(root, 'compatdata', 'game-b'); await mkdir(other);
+    await symlink(path.join(outside, 'pfx'), path.join(other, 'pfx'));
+    expect(await removeOfflineIdentityCaches(root)).toBe(0);
+    expect(await readFile(path.join(cache, 'identity.txt'), 'utf8')).toBe('keep');
   });
 });

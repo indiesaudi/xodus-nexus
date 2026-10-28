@@ -6,4 +6,3 @@
 - Explain Microsoft Store device-limit refusals instead of reporting an unexplained licensing failure.
 - Support declared plaintext game executables and launching from filesystems without symbolic links.
 - Provide package download and installation-size information.
-- Publish a native aarch64 build next to x86_64, and stop asking for an administrator password at sign-in on devices without an SMBIOS table (ARM handhelds): the firmware table is probed only when it exists.

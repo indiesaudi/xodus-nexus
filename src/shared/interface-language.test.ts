@@ -17,6 +17,18 @@ describe('interface language preferences', () => {
     expect(resolveInterfaceLanguage('system', ['ja', 'de-AT'], ['en', 'de'])).toBe('de');
     expect(resolveInterfaceLanguage(undefined, ['ar'], ['en'])).toBe('en');
   });
+  it('matches Chinese regional preferences to the same script without changing explicit matches', () => {
+    const available = ['en', 'zh-CN', 'zh-Hant'];
+    for (const language of ['zh-TW', 'zh-HK', 'zh-MO', 'zh-Hant-TW']) {
+      expect(resolveInterfaceLanguage('system', [language], available)).toBe('zh-Hant');
+    }
+    for (const language of ['zh', 'zh-SG', 'zh-Hans', 'zh-Hans-CN']) {
+      expect(resolveInterfaceLanguage(language, ['en'], available)).toBe('zh-CN');
+    }
+    expect(resolveInterfaceLanguage('zh-TW', [], ['en', 'zh-TW', 'zh-Hant'])).toBe('zh-TW');
+    expect(resolveInterfaceLanguage('zh-TW', [], ['en', 'zh-CN'])).toBe('en');
+    expect(resolveInterfaceLanguage('system', ['zh-HK', 'pt-BR'], ['en', 'pt-BR'])).toBe('pt-BR');
+  });
 });
 
 describe('plain-text translation schema', () => {

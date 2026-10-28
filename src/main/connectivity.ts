@@ -18,9 +18,13 @@ export function probeHost(host: string, port: number, timeoutMs: number): Promis
   return new Promise((resolve) => {
     let settled = false;
     const socket = createConnection({ host, port });
+    // Socket inactivity alone does not bound a stalled DNS lookup.
+    const deadline = setTimeout(() => finish(false), timeoutMs);
+    deadline.unref?.();
     const finish = (reachable: boolean) => {
       if (settled) return;
       settled = true;
+      clearTimeout(deadline);
       socket.destroy();
       resolve(reachable);
     };
@@ -37,6 +41,7 @@ export function probeHost(host: string, port: number, timeoutMs: number): Promis
  */
 export function classifyConnectivity(interfaceOnline: boolean, reachable: boolean[], checkedAt: string): ConnectivityStatus {
   if (!interfaceOnline) return { state: 'offline', checkedAt, reason: 'No network interface is connected.' };
+  if (!reachable.length) return { state: 'unknown', checkedAt };
   if (reachable.some(Boolean)) return { state: 'online', checkedAt };
   return { state: 'offline', checkedAt, reason: `Microsoft sign-in hosts did not answer within ${PROBE_TIMEOUT_MS / 1000} seconds.` };
 }

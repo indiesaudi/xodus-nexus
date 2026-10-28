@@ -21,6 +21,7 @@ function settle(result: { code: number | null; output: string; log: string[] }, 
   const failure = offlinePermissionFailure(result.log);
   let status: OfflinePermissions | undefined;
   try { status = parseOfflinePermissions(result.output); } catch (error) { if (result.code === 0) throw error; }
+  if (changing && status && !status.requestSuccess) throw Error(failure ?? 'Microsoft did not apply the change.');
   if (result.code !== 0) {
     if (changing && status && !status.requestSuccess) {
       throw Error(failure ?? 'Microsoft did not apply the change.');
@@ -43,5 +44,7 @@ export async function readOfflinePermissions(run: Runner, licenseCache?: string)
 /** Changes the designation. The caller confirms with the user first; Microsoft
  * counts every change against a yearly limit. */
 export async function changeOfflinePermissions(run: Runner, enabled: boolean, licenseCache?: string): Promise<OfflinePermissions> {
-  return settle(await run(['--set', enabled ? 'true' : 'false', '--confirm', ...cacheArgs(licenseCache)]), true);
+  const result = settle(await run(['--set', enabled ? 'true' : 'false', '--confirm', ...cacheArgs(licenseCache)]), true);
+  if (result.enabled !== enabled) throw Error('Microsoft did not apply the change.');
+  return result;
 }

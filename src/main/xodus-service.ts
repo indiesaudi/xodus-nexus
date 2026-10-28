@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { externalLauncherEnvironment } from './launcher-environment.js';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import {releasedInviteDllHashes,releasedInviteModules,releasedInviteSource} from './game-invite-runtime.js';
 import { constants, promises as fs } from 'node:fs';
 import { createConnection, createServer, type Server, type Socket } from 'node:net';
 import path from 'node:path';
@@ -11,10 +12,6 @@ export interface XodusServiceSession {
   socketPath: string;
   bridgePort: number;
   bridgeKey: string;
-  /** The service process and its private runtime directory, for a daemon that must re-adopt them after a restart. */
-  pid?: number;
-  runtimeDir?: string;
-  startedAt?: string;
   stop(): Promise<void>;
 }
 
@@ -24,10 +21,8 @@ export interface XodusBridge {
   stop(): Promise<void>;
 }
 
-/** `reuse` rebinds the bridge a running game already knows (same port and key) after a daemon restart. */
-export async function startXodusBridge(socketPath: string, reuse?: { port: number; key: string }): Promise<XodusBridge> {
-  if (reuse && !/^[0-9a-f]{64}$/.test(reuse.key)) throw new Error('Invalid bridge key.');
-  const key = reuse?.key ?? randomBytes(32).toString('hex');
+export async function startXodusBridge(socketPath: string): Promise<XodusBridge> {
+  const key = randomBytes(32).toString('hex');
   const expected = Buffer.from(key, 'ascii');
   const clients = new Set<Socket>();
   const server: Server = createServer((client) => {
@@ -61,7 +56,7 @@ export async function startXodusBridge(socketPath: string, reuse?: { port: numbe
   });
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(reuse?.port ?? 0, '127.0.0.1', () => { server.removeListener('error', reject); resolve(); });
+    server.listen(0, '127.0.0.1', () => { server.removeListener('error', reject); resolve(); });
   });
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Could not bind the Xodus loopback bridge.');
@@ -75,7 +70,7 @@ export async function startXodusBridge(socketPath: string, reuse?: { port: numbe
   };
 }
 
-export function socketReady(socketPath: string): Promise<boolean> {
+async function socketReady(socketPath: string): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = createConnection(socketPath);
     socket.once('connect', () => { socket.destroy(); resolve(true); });
@@ -95,7 +90,21 @@ export async function cloudSaveRuntime(winePath: string): Promise<boolean> {
   const features = await runtimeFeatures(winePath);
   return features.includes('cloud-saves-pr28') && features.includes('xodus-tcp-bridge-v1');
 }
-export async function gameInviteRuntime(winePath:string):Promise<boolean>{return (await runtimeFeatures(winePath)).includes('xgame-invitations-v1');}
+export async function offlineIdentityRuntime(winePath: string): Promise<boolean> {
+  return (await runtimeFeatures(winePath)).includes('xuser-offline-identity-v2');
+}
+export async function gameInviteRuntime(winePath:string):Promise<boolean>{
+ if((await runtimeFeatures(winePath)).includes('xgame-invitations-v1'))return true;
+ const root=path.resolve(path.dirname(winePath),'..','..');
+ try{
+  const metadata:unknown=JSON.parse(await fs.readFile(path.join(root,'XODUS_NEXUS_PATCH.json'),'utf8'));
+  if(!releasedInviteSource(metadata))return false;
+  const hashes=Object.fromEntries(await Promise.all(Object.keys(releasedInviteDllHashes).map(async arch=>[
+   arch,createHash('sha256').update(await fs.readFile(path.join(root,'files/lib/wine',arch+'-windows/xgameruntime.dll'))).digest('hex'),
+  ])));
+  return releasedInviteModules(hashes);
+ }catch{return false;}
+}
 
 export async function storeContentRuntime(winePath: string): Promise<boolean> {
   const features = await runtimeFeatures(winePath);
@@ -184,7 +193,7 @@ export async function startXodusService(
         bridge = await startXodusBridge(socketPath);
         backendDiagnostic({ operation: 'service', event: 'validation', stage: 'ready' });
         onStatus('Xodus account service and private loopback bridge are ready.');
-        return { socketPath, bridgePort: bridge.port, bridgeKey: bridge.key, pid: child.pid, runtimeDir, startedAt: new Date().toISOString(), stop };
+        return { socketPath, bridgePort: bridge.port, bridgeKey: bridge.key, stop };
       }
       if (exitCode !== null) throw new Error(credentialError.message ?? `xodus-service exited with code ${exitCode}. Check the stored Xodus account and network connection.`);
       await new Promise((resolve) => setTimeout(resolve, 250));

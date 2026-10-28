@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { downloadFailure, estimateTimeRemaining, isNewerVersion, parseBackendHelp, progressBytesFromLine, progressFromLine, safeProductId, stripAnsi } from './utils.js';
 
 describe('parseBackendHelp', () => {
+  it('discovers native social commands without assuming support from login alone',()=>{
+    expect(parseBackendHelp('  native-social     Xbox friends and messages\n').nativeSocial).toBe(true);
+    expect(parseBackendHelp('  login      Sign in\n').nativeSocial).toBe(false);
+  });
   it('negotiates the dedicated sign-in UI only when advertised', () => {
     expect(parseBackendHelp('  login    Login\nOptions:\n  --external-webview-stdio  External UI\n').externalAuth).toBe(true);
     expect(parseBackendHelp('  login    Login\n').externalAuth).toBe(false);
