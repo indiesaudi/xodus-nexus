@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Close games like a user when you press Stop, so their cloud saves can finish uploading; a second Stop forces the game to end. Builds without the close helper stop games as before. Thanks @indiesaudi.
 - Add native arm64 launcher and backend builds, with architecture-aware downloads and updates. Thanks @indiesaudi.
 
 - Overlap local data verification and staged writes during game updates without changing checkpoint recovery.
