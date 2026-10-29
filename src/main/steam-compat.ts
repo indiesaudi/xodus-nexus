@@ -168,19 +168,38 @@ export async function steamProtonLayout(protonRoot: string, env: NodeJS.ProcessE
 
 const PE_MACHINES: Record<number, ProtonLayout['peArch']> = { 0x8664: 'x86_64-windows', 0xaa64: 'aarch64-windows' };
 
-/** The PE architecture of a prepared prefix, read from its system32 kernel32 (ARM64X reports ARM64). */
-export async function prefixArchitecture(prefix: string): Promise<ProtonLayout['peArch'] | undefined> {
+/** The COFF machine of a PE file, or undefined when it is not a readable PE image. */
+async function peMachine(file: string): Promise<number | undefined> {
   let handle;
   try {
-    handle = await fs.open(path.join(prefix, 'drive_c', 'windows', 'system32', 'kernel32.dll'), 'r');
+    handle = await fs.open(file, 'r');
     const header = Buffer.alloc(4096);
     const { bytesRead } = await handle.read(header, 0, header.length, 0);
     if (bytesRead < 0x40 || header.toString('latin1', 0, 2) !== 'MZ') return undefined;
     const pe = header.readUInt32LE(0x3c);
     if (pe + 6 > bytesRead || header.toString('latin1', pe, pe + 4) !== 'PE\0\0') return undefined;
-    return PE_MACHINES[header.readUInt16LE(pe + 4)];
+    return header.readUInt16LE(pe + 4);
   } catch { return undefined; }
   finally { await handle?.close().catch(() => undefined); }
+}
+
+/** The PE architecture of a prepared prefix, read from its system32 kernel32 (ARM64X reports ARM64). */
+export async function prefixArchitecture(prefix: string): Promise<ProtonLayout['peArch'] | undefined> {
+  const machine = await peMachine(path.join(prefix, 'drive_c', 'windows', 'system32', 'kernel32.dll'));
+  return machine === undefined ? undefined : PE_MACHINES[machine];
+}
+
+const IMAGE_FILE_MACHINE_I386 = 0x14c;
+
+/**
+ * The overlay is 64-bit only (system32), so a 32-bit game under Steam's
+ * Proton is refused before the prefix is touched. An executable the package
+ * keeps encrypted cannot be read here and is left to the launch.
+ */
+export async function requireSupportedGameExecutable(file: string): Promise<void> {
+  if (await peMachine(file) === IMAGE_FILE_MACHINE_I386) {
+    throw new Error("This game's executable is 32-bit (x86). With a Steam-selected Proton, Xodus Nexus supports 64-bit games only, because the Xbox runtime components it adds are 64-bit. Clear the compatibility tool for this game in Steam.");
+  }
 }
 
 async function requireSameArchitecture(prefix: string, layout: ProtonLayout): Promise<void> {

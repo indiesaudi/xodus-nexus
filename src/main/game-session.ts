@@ -19,7 +19,8 @@ import { GameContent } from './game-content.js';
 import type { AcquiredService, ServiceSessions } from './service-sessions.js';
 import { refreshOfflineLicenses } from './license-refresh.js';
 import { protonRootOf } from './proton-layout.js';
-import { forwardedWrappers, launchViewDirectory, prepareSteamOverlay, steamCompatData, steamCompatMounts, steamProtonCommand, writeSteamLauncher, writeWrappedLauncher } from './steam-compat.js';
+import { forwardedWrappers, launchViewDirectory, prepareSteamOverlay, requireSupportedGameExecutable, steamCompatData, steamCompatMounts, steamProtonCommand, writeSteamLauncher, writeWrappedLauncher } from './steam-compat.js';
+import { resolvePackageFile } from './windows-path.js';
 import { profileIdOf } from '../shared/profile-id.js';
 
 /** Device-bound offline licenses written by `xodus-cli run --license-cache`. */
@@ -211,6 +212,10 @@ export class GameSession {
       const steamRoot = path.join(deps.paths.home, '.steam', 'root');
       // Steam's Proton: Steam owns the prefix, Nexus adds its runtime overlay
       // and runs the game from a full private launch view (no Wine file maps).
+      if (steamProton) {
+        const executable = await resolvePackageFile(game.path, inspected.executable ?? '');
+        if (executable) await requireSupportedGameExecutable(path.join(await fs.realpath(game.path), executable));
+      }
       const steamPrefix = steamProton ? (await steamCompatData(baseEnvironment)).prefix : undefined;
       const overlay = steamProton ? await prepareSteamOverlay(steamProton, protonRootOf(wine), baseEnvironment, addGameLog) : undefined;
       const viewDirectory = steamProton ? await launchViewDirectory(baseEnvironment, profileIdOf(deps.paths.userData)) : undefined;

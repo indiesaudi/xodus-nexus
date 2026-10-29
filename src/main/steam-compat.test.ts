@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  forwardedSteamCommand, forwardedWrappers, launchViewDirectory, OVERLAY_COMPONENTS, overlayRuntime, parseSteamCommand, prefixArchitecture, prepareSteamOverlay,
+  forwardedSteamCommand, forwardedWrappers, launchViewDirectory, OVERLAY_COMPONENTS, overlayRuntime, parseSteamCommand, prefixArchitecture, prepareSteamOverlay, requireSupportedGameExecutable,
   steamCompatData, steamCompatMounts, steamProtonCommand, steamProtonLayout, wrapperPrefix, writeSteamLauncher, writeWrappedLauncher,
 } from './steam-compat.js';
 import { descendants, splitSteamCommand, steamLaunchPlan } from '../client/index.js';
@@ -319,5 +319,32 @@ describe.skipIf(!linux)('Steam prefix and overlay', () => {
   it('wraps the Nexus runtime launcher in the shortcut\'s wrappers', async () => {
     const file = await writeWrappedLauncher(path.join(root, 'wrappers'), [armada], '/data/compatdata/x/xodus-proton-wine');
     expect(await fs.readFile(file, 'utf8')).toBe(`#!/bin/sh\nexec '${armada}' '/data/compatdata/x/xodus-proton-wine' "$@"\n`);
+  });
+});
+
+describe('Steam Proton game executable', () => {
+  let root: string;
+  beforeEach(async () => { root = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-steam-exe-')); });
+  afterEach(async () => { await fs.rm(root, { recursive: true, force: true }); });
+
+  async function exe(name: string, machine: number) {
+    const image = Buffer.alloc(0x100);
+    image.write('MZ', 0, 'latin1');
+    image.writeUInt32LE(0x80, 0x3c);
+    image.write('PE\0\0', 0x80, 'latin1');
+    image.writeUInt16LE(machine, 0x84);
+    const file = path.join(root, name);
+    await fs.writeFile(file, image);
+    return file;
+  }
+
+  it('refuses a 32-bit executable and accepts 64-bit, ARM64 and unreadable (encrypted) ones', async () => {
+    await expect(requireSupportedGameExecutable(await exe('x86.exe', 0x14c))).rejects.toThrow('32-bit (x86)');
+    await requireSupportedGameExecutable(await exe('x64.exe', 0x8664));
+    await requireSupportedGameExecutable(await exe('arm64.exe', 0xaa64));
+    const encrypted = path.join(root, 'encrypted.exe');
+    await fs.writeFile(encrypted, Buffer.alloc(0x100, 0xa5));
+    await requireSupportedGameExecutable(encrypted);
+    await requireSupportedGameExecutable(path.join(root, 'missing.exe'));
   });
 });
