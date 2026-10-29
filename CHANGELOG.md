@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add an optional full launch view to the backend (0.2.14: `run --materialize-all --view-dir`, with `--playfab-adapter`), so a game can run under another Wine or Proton without Wine file maps. Existing launches are unchanged. Thanks @indiesaudi.
+
 - Add native arm64 launcher and backend builds, with architecture-aware downloads and updates. Thanks @indiesaudi.
 
 - Overlap local data verification and staged writes during game updates without changing checkpoint recovery.
