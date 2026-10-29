@@ -31,6 +31,7 @@ const defaultSettings: Settings = {
   runtimeRoot: path.join(defaultDataRoot, 'runtimes'),
   verboseLogs: false,
   ...defaultXboxOverlay,
+  backgroundDaemon: false,
 };
 
 export class StateStore {

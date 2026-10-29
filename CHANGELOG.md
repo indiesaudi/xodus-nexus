@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add an optional background service (**Settings → Advanced → Background service**, off by default): Steam shortcuts start games through it, Exit game in Steam lets the game finish uploading its cloud saves, a signed-in account service stays ready between launches, and a running game survives the service restarting. Thanks @indiesaudi.
 - Close games like a user when you press Stop, so their cloud saves can finish uploading; a second Stop forces the game to end. Builds without the close helper stop games as before. Thanks @indiesaudi.
 - Add native arm64 launcher and backend builds, with architecture-aware downloads and updates. Thanks @indiesaudi.
 
