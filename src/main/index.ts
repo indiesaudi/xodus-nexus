@@ -52,7 +52,7 @@ import { GameSession, gameLocales, type ActiveGame } from './game-session.js';
 import { EphemeralServiceSessions } from './service-sessions.js';
 import { InstallQueue, assertActivityCompatible, assertInstallDestination, canonicalInstallPath, installPathsOverlap } from './install-queue.js';
 import { GameDisplayBlocker } from './game-display.js';
-import { GameShortcuts, shortcutArguments, shortcutInstanceData, shortcutInstanceRequest, shortcutLauncherPath, type ShortcutDestination } from './game-shortcuts.js';
+import { GameShortcuts, shortcutArguments, shortcutInstanceData, shortcutInstanceRequest, shortcutLauncherPath, type ShortcutDestination, type ShortcutRequest } from './game-shortcuts.js';
 import { ShortcutLaunch } from './shortcut-launch.js';
 import { loadShortcutIcon } from './shortcut-icon.js';
 import { AccountProfile } from './account-profile.js';
@@ -227,9 +227,9 @@ let finalizingGame = false;
 let shortcutOnly = false;
 let launchReady = false;
 let windowOpening: Promise<void> | undefined;
-const pendingRequests: (string | undefined)[] = [];
+const pendingRequests: ShortcutRequest[] = [];
 const pendingShortcutErrors: unknown[] = [];
-let startupRequest: ReturnType<typeof shortcutArguments> = {};
+let startupRequest: ShortcutRequest = {};
 let startupError: Error | undefined;
 try {
   startupRequest = shortcutArguments(process.argv.slice(1));
@@ -245,7 +245,7 @@ if (process.platform === 'linux') {
 const primaryInstance = demoMode || app.requestSingleInstanceLock(shortcutInstanceData(startupRequest, Boolean(startupError)));
 if (!primaryInstance) app.quit();
 else if (!demoMode) app.on('second-instance', (_event, _argv, _workingDirectory, additionalData) => {
-  try { receiveLaunchRequest(shortcutInstanceRequest(additionalData, app.getPath('userData')).gameId); }
+  try { receiveLaunchRequest(shortcutInstanceRequest(additionalData, app.getPath('userData'))); }
   catch (error) {
     if (launchReady) void shortcutError(error);
     else pendingShortcutErrors.push(error);
@@ -253,7 +253,7 @@ else if (!demoMode) app.on('second-instance', (_event, _argv, _workingDirectory,
 });
 const shortcutLaunch = new ShortcutLaunch(
   () => gameOperation?.kind === 'launch' && ['preparing', 'running', 'stopping'].includes(gameOperation.status) ? gameOperation.gameId : undefined,
-  (id) => launchGame(id),
+  (id, steamCommand) => launchGame(id, steamCommand),
 );
 
 async function showLauncher(): Promise<void> {
@@ -274,10 +274,10 @@ function finishShortcutSession(): void {
   // Account service and game-process cleanup must finish before normal quit.
   if (launchReady && (shortcutOnly || !mainWindow || mainWindow.isDestroyed()) && !nativeSocialKeepAlive.some(active=>active()) && !shortcutLaunch.preparing && !preparingLaunch && !finalizingGame && downloadCancellations.size === 0 && installQueue.size === 0 && operations.size === 0 && serviceSessions.size === 0) app.quit();
 }
-function receiveLaunchRequest(id?: string): void {
-  if (!launchReady) { pendingRequests.push(id); return; }
-  if (!id) { void showLauncher(); return; }
-  void shortcutLaunch.request(id).catch(shortcutError).finally(finishShortcutSession);
+function receiveLaunchRequest(request: ShortcutRequest): void {
+  if (!launchReady) { pendingRequests.push(request); return; }
+  if (!request.gameId) { void showLauncher(); return; }
+  void shortcutLaunch.request(request.gameId, request.steamCommand).catch(shortcutError).finally(finishShortcutSession);
 }
 
 function snapshot(): AppSnapshot {
@@ -1025,11 +1025,11 @@ const gameSession = new GameSession({
   },
 });
 
-async function launchGame(id: string): Promise<void> {
+async function launchGame(id: string, steamCommand?: string[]): Promise<void> {
   ensureIdle('launch');
   preparingLaunch = true;
   let active: ActiveGame;
-  try { active = await gameSession.launch(id); }
+  try { active = await gameSession.launch(id, { steamCommand }); }
   finally { preparingLaunch = false; }
   operations.set(active.operationId, active.process.child);
   gameProcesses.set(active.operationId, active.process);
@@ -2120,13 +2120,13 @@ app.whenReady().then(async () => {
   if (startupRequest.gameId) {
     await prepareSystemWallet();
     await refreshAccount(false);
-    receiveLaunchRequest(startupRequest.gameId);
+    receiveLaunchRequest(startupRequest);
   } else await showBeforeAccountCheck(showLauncher, refreshInitialAccount, () => {
     if (shutdownStarted || authState.running || authState.lastResult === 'success') return;
     authState = { ...authState, note: 'Account status is unavailable. Check the system keyring in Settings, then refresh.' };
     emitSnapshot();
   });
-  for (const id of pendingRequests.splice(0)) receiveLaunchRequest(id);
+  for (const request of pendingRequests.splice(0)) receiveLaunchRequest(request);
   for (const error of pendingShortcutErrors.splice(0)) void shortcutError(error);
   app.on('activate', () => { void showLauncher(); });
 }).catch((error) => {
