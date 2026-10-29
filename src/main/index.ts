@@ -2116,16 +2116,21 @@ app.whenReady().then(async () => {
    await overlayShortcut.configure(store.settings);
   }
   // No external toggle socket or compositor scripts are installed automatically.
-  launchReady = true;
   if (startupRequest.gameId) {
     await prepareSystemWallet();
     await refreshAccount(false);
+    // Only now: the account refresh resets the party, whose idle event would
+    // otherwise end a shortcut session before its launch is registered.
+    launchReady = true;
     receiveLaunchRequest(startupRequest);
-  } else await showBeforeAccountCheck(showLauncher, refreshInitialAccount, () => {
-    if (shutdownStarted || authState.running || authState.lastResult === 'success') return;
-    authState = { ...authState, note: 'Account status is unavailable. Check the system keyring in Settings, then refresh.' };
-    emitSnapshot();
-  });
+  } else {
+    launchReady = true;
+    await showBeforeAccountCheck(showLauncher, refreshInitialAccount, () => {
+      if (shutdownStarted || authState.running || authState.lastResult === 'success') return;
+      authState = { ...authState, note: 'Account status is unavailable. Check the system keyring in Settings, then refresh.' };
+      emitSnapshot();
+    });
+  }
   for (const request of pendingRequests.splice(0)) receiveLaunchRequest(request);
   for (const error of pendingShortcutErrors.splice(0)) void shortcutError(error);
   app.on('activate', () => { void showLauncher(); });
