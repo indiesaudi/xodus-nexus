@@ -5,6 +5,18 @@ import { createRequire } from 'node:module';
 const yaml=createRequire(import.meta.url)('js-yaml');
 const read=async name=>yaml.load(await fs.readFile(`.github/workflows/${name}.yml`,'utf8'));
 const candidateGuard="github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[source-only]')";
+test('manual launcher candidates can select x64 without weakening main-only checks', async()=>{
+  const workflow=await read('ci');
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs.architecture.options,['both','x64']);
+  assert.equal(workflow.on.workflow_dispatch.inputs.architecture.default,'both');
+  const build=workflow.jobs.checks.steps.find(step=>step.name==='Build launcher candidate (never publish)');
+  assert.equal(build.if,candidateGuard);
+  assert.match(build.run,/x64\) npx --no-install electron-builder --linux AppImage --x64 --publish never/);
+  assert.match(build.run,/both\) npx --no-install electron-builder --linux AppImage --x64 --arm64 --publish never/);
+  assert.match(build.run,/Unsupported launcher architecture selection/);
+  assert.ok(workflow.jobs.checks.steps.some(step=>step.run==='npm run build'&&step.if===candidateGuard));
+  assert.ok(workflow.jobs.checks.steps.some(step=>step.run==='node scripts/ci/artifact-manifest.mjs write launcher release'&&step.if===candidateGuard));
+});
 test('full backend/runtime workflows only build main, including manual dispatch',async()=>{
   for(const [name,job] of [['backend','build'],['runtime','changes']]){
     const workflow=await read(name);

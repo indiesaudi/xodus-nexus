@@ -65,6 +65,30 @@ test('eligible French placeholder and Spanish text are accepted by the technical
   assert.equal(assess(other, languages[2], english).reason, 'eligible');
 });
 
+test('audit reveals embedded suggestions when an untranslated placeholder reports zero count', async () => {
+  const f = fixture();
+  Object.assign(f.current.translations.fr, { id: null, activeSuggestionCount: 0 });
+  const report = await acceptSuggestions({ api: f.api, english, texts: true });
+  assert.equal(report.entries.length, 1);
+  assert.notEqual(report.entries[0].status, 'eligible', 'do not weaken automatic acceptance based on a possibly limited list');
+  assert.equal(report.suggestionSnapshot[0].suggestions[0].text, 'Annuler {game} ?');
+  assert.equal(report.suggestionSnapshot[0].reportedSuggestionCount, 0);
+  assert.equal(report.suggestionSnapshot[0].hasTranslationRecord, false);
+  assert.deepEqual(report.languageSummary[0], { language: 'fr', reviewed: 0, translated: 0, pendingSuggestions: 1, uncountedSuggestions: 1 });
+  assert.ok(f.calls.every(call => call.method === 'GET'));
+});
+
+test('audit includes existing unreviewed texts without accepting or changing them', async () => {
+  const f = fixture();
+  Object.assign(f.current.translations.es, { text: '¿Cancelar {game}?', state: 'TRANSLATED' });
+  const report = await acceptSuggestions({ api: f.api, english, texts: true });
+  assert.equal(report.existingSnapshot.length, 1);
+  assert.equal(report.existingSnapshot[0].language, 'es');
+  assert.equal(report.existingSnapshot[0].current, '¿Cancelar {game}?');
+  assert.equal(report.languageSummary[1].translated, 1);
+  assert.ok(f.calls.every(call => call.method === 'GET'));
+});
+
 test('protect base English and English variants even if their metadata claims otherwise', () => {
   assert.equal(assess(row(), languages[0], english).reason, 'protected-source');
   assert.equal(assess(row(), { tag: 'en-GB', base: false }, english).reason, 'protected-source');
@@ -175,7 +199,8 @@ test('opt-in review snapshot exports only public UI pairs and binds approval to 
   assert.match(report.reviewDigest, /^[a-f0-9]{64}$/);
   assert.doesNotMatch(JSON.stringify(report.reviewSnapshot), /author|languageId|keyId|suggestionId/);
   assert.deepEqual(report.suggestionSnapshot, [{ language: 'fr', key: 'common.cancel_game', source: 'Cancel {game}?',
-    current: null, state: 'UNTRANSLATED', reason: 'eligible', suggestions: [{ text: 'Annuler {game} ?', plural: false }] }]);
+    current: null, state: 'UNTRANSLATED', reportedSuggestionCount: 1, hasTranslationRecord: true,
+    reason: 'eligible', suggestions: [{ text: 'Annuler {game} ?', plural: false }] }]);
   assert.doesNotMatch(JSON.stringify(report.suggestionSnapshot), /author|languageId|keyId|suggestionId/);
   const actual = fixture();
   assert.equal((await acceptSuggestions({ api: actual.api, english, apply: true, reviewed: true, reviewDigest: report.reviewDigest })).reviewed, 1);

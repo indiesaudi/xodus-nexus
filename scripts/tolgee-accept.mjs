@@ -147,6 +147,12 @@ export function viewRoute(tags, keyId) {
   return `${project}/translations?${query}`;
 }
 
+// Tolgee may attach suggestions to an untranslated placeholder whose count is
+// still zero. Discover these for human review, without treating the embedded
+// (possibly limited) list as proof that automatic acceptance is safe.
+const hasSuggestions = cell => Boolean(cell?.activeSuggestionCount ||
+  cell?.suggestions?.some(value => value.state === 'ACTIVE'));
+
 export async function acceptSuggestions({ api, english, apply = false, reviewed = false, tags = [], report = {}, texts = false, exclude = [], reviewDigest }) {
   if (reviewed && !apply) throw Error('Reviewed mode requires explicit apply.');
   if (texts && apply) throw Error('Text snapshots are preview-only.');
@@ -175,11 +181,17 @@ export async function acceptSuggestions({ api, english, apply = false, reviewed 
   report.requestedLanguages = requestedLanguages;
   report.returnedLanguages = returnedLanguages;
   report.unavailableLanguages = requestedLanguages.filter(tag => !returnedLanguages.includes(tag));
+  report.languageSummary = targets.map(({ tag }) => ({ language: tag,
+    reviewed: rows.filter(row => row.translations?.[tag]?.state === 'REVIEWED').length,
+    translated: rows.filter(row => row.translations?.[tag]?.state === 'TRANSLATED').length,
+    pendingSuggestions: rows.filter(row => hasSuggestions(row.translations?.[tag])).length,
+    uncountedSuggestions: rows.filter(row => !row.translations?.[tag]?.activeSuggestionCount && hasSuggestions(row.translations?.[tag])).length,
+  }));
   if (apply && report.unavailableLanguages.length) throw Error('The API omitted requested languages. No writes performed; inspect language coverage.');
   const pending = [];
   for (const row of rows) for (const language of targets) {
     const cell = row.translations?.[language.tag];
-    if (!cell?.activeSuggestionCount) continue;
+    if (!hasSuggestions(cell)) continue;
     const decision = assess(row, language, english);
     const entry = { key: own(english, row.keyName) ? row.keyName : '(unknown)', language: language.tag, status: decision.reason };
     report.entries.push(entry);
@@ -196,12 +208,21 @@ export async function acceptSuggestions({ api, english, apply = false, reviewed 
     // without weakening the automatic acceptance policy.
     report.suggestionSnapshot = rows.flatMap(row => targets.flatMap(language => {
       const cell = row.translations?.[language.tag];
-      if (!cell?.activeSuggestionCount) return [];
+      if (!hasSuggestions(cell)) return [];
       return [{ language: language.tag, key: row.keyName,
         source: row.translations.en?.text, current: cell.text, state: cell.state,
+        reportedSuggestionCount: cell.activeSuggestionCount,
+        hasTranslationRecord: id(cell.id),
         reason: assess(row, language, english).reason,
         suggestions: (cell.suggestions ?? []).filter(value => value.state === 'ACTIVE')
           .map(value => ({ text: value.translation, plural: value.isPlural })) }];
+    }));
+    report.existingSnapshot = rows.flatMap(row => targets.flatMap(language => {
+      const cell = row.translations?.[language.tag];
+      if (cell?.state !== 'TRANSLATED' || !cell.text) return [];
+      return [{ language: language.tag, key: row.keyName, source: row.translations.en?.text,
+        current: cell.text, state: cell.state, outdated: cell.outdated,
+        comments: cell.unresolvedCommentCount, qa: cell.qaIssueCount ?? 0 }];
     }));
   }
   if (reviewDigest !== undefined && report.reviewDigest !== reviewDigest) throw Error('Suggestions changed since the language review. No writes performed.');

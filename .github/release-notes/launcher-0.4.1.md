@@ -1,30 +1,44 @@
 # Xodus Nexus 0.4.1
 
-- Add a redesigned Social panel with player profiles, friend management and separate chat windows.
-- Add a notification bell for unread messages and game updates, including a 9+ badge. Open conversations at the latest message and keep read state in sync between windows.
-- Add experimental Xbox voice parties and the optional **Nexus Overlay**, with a configurable shortcut, screen edge and shared party controls.
-- Improve download and update performance with parallel transfers, batched writes and pipelined reuse of verified local data. Recover interrupted updates safely and prevent launching incomplete updates.
-- Add native ARM64 launcher and backend builds, architecture-aware runtime downloads and per-game FEX settings.
-- Add Microsoft offline-device permissions and license-checked offline launches with a compatible runtime. Games need an online launch after designating the device.
-- Open screenshots, achievements and game details for games that are not installed. Keep installation tied to the selected edition.
-- Fix overlay shortcut editing, disabled-overlay shortcut registration and opening the overlay when game-window display information is unavailable. Show enabled status in green.
-- Fix Xbox sign-in for compact JWE tickets and malformed or reordered authentication responses.
-- Avoid unnecessary administrator password prompts on devices without an SMBIOS firmware table.
-- Add community French and Polish UI translations and update translation synchronization and review tools.
+## Launcher
 
-Thanks @Rbanh, @indiesaudi, @burghr and @xerhab for their contributions.
+- Redesign the Social panel with player profiles, friend management and separate chat windows.
+- Add a notification bell for unread messages and game updates.
+- Open conversations at the latest message and synchronize read state between chat windows.
+- Add experimental Xbox voice parties and the optional **Nexus Overlay**, with a configurable keyboard shortcut and screen position.
+- Improve download and update performance with parallel transfers, batched writes and faster processing of verified local data.
+- Improve interrupted-update recovery and prevent launching games with incomplete updates.
+- Add Microsoft offline-device management and license-checked offline launches. Offline play requires a compatible runtime, device designation and an initial online launch.
+- Show game details, screenshots and achievements for games that are not installed.
+- Fix Overlay shortcut changes reverting, unnecessary shortcut registration when disabled, and opening failures when game-window display information is unavailable.
+- Fix sign-in failures affecting some Microsoft accounts and improve authentication response handling.
+- Avoid unnecessary administrator password prompts on devices without an SMBIOS firmware table.
 
 ## Xodus Nexus backend 0.2.13
 
-- Add native ARM64 builds and authenticated Social, chat and voice-party APIs.
-- Improve downloads and incremental updates while preserving verified data, recovery checkpoints and active game sessions.
-- Support Microsoft-designated offline play with account-bound licenses and revocation checks.
-- Fix Xbox authentication response handling and skip missing SMBIOS firmware tables at sign-in.
+- Add the APIs needed for the expanded Social panel, chat and experimental voice parties.
+- Improve downloads and incremental updates while preserving verified data and recovery checkpoints.
+- Support Microsoft-designated offline play with account-bound license validation.
+- Fix Xbox authentication response handling and sign-in on devices without SMBIOS firmware information.
 
 ## Nexus runtime
 
-- Fix Age of Empires IV startup with current-game Windows Store licensing. Thanks @Anirudh09.
-- Add experimental native ARM64 runtime builds and keep per-game FEX state separate from the installed runtime.
-- Support license-gated offline sign-in with the compatible backend and launcher.
+- Fix Age of Empires IV startup through Windows Store licensing support. Thanks @Anirudh09.
+- Add license-checked offline sign-in with the compatible backend and launcher.
 
-ARM64 game compatibility remains experimental. In-game invitation support varies by game; Deep Rock Galactic invitation delivery is not fixed in this update.
+Update the Nexus backend to **0.2.13** and install the accompanying **x86_64 Nexus runtime** in Settings.
+
+Voice parties and the Overlay are experimental. In-game invitation support varies by game.
+
+Thanks @Rbanh, @indiesaudi, @burghr and @xerhab for their contributions.
+
+> [!CAUTION]
+> **Xodus Nexus is an independent, unofficial project built on Xodus. It is not an official project or release from the upstream Xodus developers.**
+>
+> Please report Xodus Nexus issues only in the [Xodus Nexus repository](https://github.com/domsvoboda/xodus-nexus/issues). A problem in Nexus does not necessarily indicate a problem in upstream Xodus.
+
+## Steam Deck and similar handhelds
+
+Steam Deck and similar handheld support is experimental. I'm currently testing and debugging on virtualized SteamOS and Bazzite, so I can't fully verify how everything behaves on real handheld hardware. Please report any issues you encounter.
+
+I'm looking to buy an older Steam Deck or a similar handheld compatible with Bazzite or SteamOS for development and testing. If you have one you'd be willing to sell, please message me on Reddit at [u/Embarrassed-Hall-617](https://www.reddit.com/user/Embarrassed-Hall-617/). Cosmetic damage and signs of wear don't matter, as long as the device's basic functions work.

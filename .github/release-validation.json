@@ -3,6 +3,43 @@
   "approvals": [
     {
       "kind": "launcher",
+      "runId": "40778408677",
+      "commit": "e0668a12f1da931aed13537ef04295599011317b",
+      "manifestSha256": "786f1e5635377d56b3559d1209ea29dd4a2fcc6e52cf4a0468854f79a837ac96",
+      "notesSha256": "6f8bc61ca48d4bccc67fdc949e2cc15416204c89370cab2f8b550b5fab60b6c7",
+      "approved": true,
+      "approvedBy": "domsvoboda",
+      "realGameTest": false,
+      "exactCandidateGameTestWaived": true,
+      "evidence": "Explicit human approval of 0.4.1 publication and the complete component notes, with the three requested wording removals and preserved caution/handheld request. The human separately refused another game launch and explicitly authorized this release after automated checks and package verification without a new game test of the exact CI candidate. Main-only x64 build40778408677 passed the full source build, 1674 tests, 38 runtime-tool checks and 142 CI-tool checks. Original candidate manifest and SHA256/SHA512 passed; all368 packaged source/compiled payload files match the checked tree, version0.4.1, backend recipe and new runtime repository are correct, and deferred target-language catalogues are absent. Backend40758619088 and x64 runtime40765286585 passed exact asset/source/native evidence verification. No new game, account, cloud or ARM runtime acceptance is claimed. Publish these identical bytes and digest-bound notes without rebuilding or changing production pointers."
+    },
+    {
+      "kind": "backend",
+      "runId": "40758619088",
+      "commit": "264fdfaa3eb4668869dba4968ccef4d824a83e52",
+      "manifestSha256": "1bfa0be8cb26c3743ec110108eace410fec0c0142ba56f2c6d671d97076d0484",
+      "notesSha256": "23c47082d353ec58c4c32bd2b8cae6de1455de4349965e0cd399646dbb4e602f",
+      "approved": true,
+      "approvedBy": "domsvoboda",
+      "realGameTest": false,
+      "exactCandidateGameTestWaived": true,
+      "evidence": "Explicit human authorization to publish backend0.2.13 with the approved combined0.4.1 notes. The human separately authorized an exception to another exact-candidate game test after refusing any further game launch tonight. Successful main candidate40758619088 includes both native backend architectures; complete manifests, binary/source/checksum files, pinned Rust recipe, license files and ELF architecture were verified. Exact x64 CLI run help confirms offline/materialized-chain capabilities without authenticating. Backend recipe bytes are unchanged at the launcher candidate. No game, account, cloud roundtrip or ARM game compatibility test is claimed. Publish original CI bytes with digest-bound notes and exact display title Xodus Nexus backend 0.2.13, without another build or production-pointer changes."
+    },
+    {
+      "kind": "runtime",
+      "repository": "domsvoboda/nexus-runtime",
+      "runId": "40765286585",
+      "commit": "e5afe21eca1f1494a20ebc3e8de21f2cf43c179c",
+      "manifestSha256": "d1efc5e2cd9ecd6614be817ed04340d29110042f89e03e23c186271447207295",
+      "notesSha256": "fc5a840655b117312e59785f74d21dda07f84faed8c43b29f2c7a59f22980f16",
+      "approved": true,
+      "approvedBy": "domsvoboda",
+      "realGameTest": false,
+      "exactCandidateGameTestWaived": true,
+      "evidence": "Explicit human approval to publish the successful x64 runtime with0.4.1, deferring failed ARM runtime and translations. Human separately refused another game launch and explicitly approved publication after automated checks and package verification without a new exact-candidate game test. Exact runtime40765286585 binary/source SHA256/SHA512, manifest/source graph, built metadata and all12 native CI gate logs/bindings passed. The extracted runtime retains original permissions and exactly matches tree35bfa211e3099460b544c71973f4803d5b6d9fa06b1b7a3330a9489541cb4f79; components, portability and corresponding source were verified. Requires launcher0.4.1/backend0.2.13. No fresh game, account, cloud or native ARM compatibility is claimed. Publish unchanged original CI assets in domsvoboda/nexus-runtime, never through the legacy runtime workflow."
+    },
+    {
+      "kind": "launcher",
       "runId": "40407376647",
       "commit": "ba0e191e1eb8088d00eee7bfe8da80f0a8c5ec72",
       "manifestSha256": "09004edb67dbf4a3edfb01f20831758c8a7be040927bc00ea0a279286be4304a",
