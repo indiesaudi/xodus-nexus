@@ -19,12 +19,15 @@ Your Microsoft Store PC games, on Linux.
 > and the arm64 runtime loader (#421) are merged upstream. Features that are not merged upstream
 > moved off `main`:
 >
-> - **Background service** (Steam's **Exit game** closes games gracefully): branch
->   [`feature/background-daemon`](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/tree/feature/background-daemon),
->   proposed upstream in [#360](https://github.com/domsvoboda/xodus-nexus/pull/360).
+> - **Background service** (Steam's **Exit game** closes games gracefully): proposed upstream as three PRs,
+>   [#448](https://github.com/domsvoboda/xodus-nexus/pull/448) (launch preparation in `GameSession`),
+>   [#449](https://github.com/domsvoboda/xodus-nexus/pull/449) (close games like a user) and
+>   [#450](https://github.com/domsvoboda/xodus-nexus/pull/450) (optional background service), on the
+>   `split/daemon-a-refactor`, `split/daemon-b-close` and `split/daemon-c-service` branches.
 > - **Any Proton per game** and the **Xodus Nexus** Steam compatibility tool: branch
->   [`feature/steam-any-proton`](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/tree/feature/steam-any-proton),
->   proposed upstream in [#381](https://github.com/domsvoboda/xodus-nexus/pull/381).
+>   [`feature/steam-any-proton`](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/tree/feature/steam-any-proton).
+>   Its upstream PR [#381](https://github.com/domsvoboda/xodus-nexus/pull/381) was closed; the review
+>   lists what it needs before it can be proposed again.
 > - **Fork release 0.4.1** with all of the above combined: branch
 >   [`archive/main-0.4.1`](https://github.com/indiesaudi/xodus-nexus-x86-arm64-offline-support/tree/archive/main-0.4.1).
 >

@@ -7,11 +7,13 @@ This fork's `main` now matches upstream `develop`. Compared with the fork's 0.4.
 
 - **Background service** (Settings → Advanced → Background service): the systemd user service, the thin
   Steam client, graceful **Exit game** with finished cloud-save uploads, launch recovery, and the
-  `nexus-close-window` runtime helper with its build workflow. Now on `feature/background-daemon` (#360).
+  `nexus-close-window` runtime helper with its build workflow. Now proposed upstream as #448, #449 and #450
+  (branches `split/daemon-a-refactor`, `split/daemon-b-close`, `split/daemon-c-service`), replacing #360.
 - **Any Proton per game**: the **Xodus Nexus** entry in Steam's Compatibility dropdown, honoring the Proton
   chosen in Steam for Nexus shortcuts, live Add to Steam, the Xbox-only overlay under other Protons, and
   the PlayFab Game Saves adapter and full launch view backend patches (`xodus-full-view.patch`,
-  `xodus-playfab-view-adapter.patch`). Now on `feature/steam-any-proton` (#381).
+  `xodus-playfab-view-adapter.patch`). Now on `feature/steam-any-proton`; upstream closed #381 pending
+  the changes its review asks for.
 - **Experimental arm64 game runtime pipeline**: the CachyOS arm64 Proton base lock, ARM64X overlay and
   ARM64EC DXVK builds (`runtime-arm64.yml`, `scripts/arm64/`). Native arm64 launcher and backend builds
   remain, from upstream #374. Kept on `archive/main-0.4.1`.
