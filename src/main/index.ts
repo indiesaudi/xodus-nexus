@@ -191,6 +191,8 @@ const gameActivities = new GameActivities();
 const gameAchievements = new GameAchievementsReader();
 const recentPcGamePass = new RecentPcGamePass();
 const accountLibrary = new AccountLibrary((ids, market) => catalog.licensedProducts(ids, market), undefined, market => recentPcGamePass.get(market));
+/** The longest a launch waits for owned bundles (a library read takes about 2 s) before its DLC hints. */
+const OWNED_ACCESS_WAIT_MS = 2_500;
 const installPlans = new InstallPlans(readInstallPlan);
 const demoMode = process.env.XODUS_DEMO === '1';
 const walletUnlocker = new WalletUnlocker();
@@ -1122,8 +1124,9 @@ const gameSession = new GameSession({
   licenseCache: () => offlineLicenseCache(),
   content: () => ({
     roots: (game) => contentManager().roots(game),
-    relatedProducts: (game, offline) => contentManager().relatedProducts(game, accountLibrary.peekAccess(), currentMarket(), undefined, offline),
+    relatedProducts: (game, offline, owned) => contentManager().relatedProducts(game, owned ?? accountLibrary.peekAccess(), currentMarket(), undefined, offline),
   }),
+  ownedAccess: () => { const wait = accountLibrary.startLaunchAccess(); return () => wait(OWNED_ACCESS_WAIT_MS); },
   inviteBridge: async (operationId, game, titleId, log) => {
     const account=authState.username,epoch=xboxSocial.epoch;
     const current=()=>!shutdownStarted&&authState.stored===true&&authState.username===account&&xboxSocial.epoch===epoch;

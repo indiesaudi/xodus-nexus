@@ -1,6 +1,6 @@
 import { constants, createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { BackendStatus, ConnectivityStatus, DownloadTask, Game, GameOperation, RuntimeStatus } from '../shared/types.js';
+import type { BackendStatus, ConnectivityStatus, DownloadTask, Game, GameOperation, LibraryAccess, RuntimeStatus } from '../shared/types.js';
 import { inspectGameDirectory } from './store.js';
 import { prepareProtonRunner, syncPrefixUserLocale, syncUnrealCultureGameIni } from './proton.js';
 import { accountCacheKey } from './offline-identity.js';
@@ -43,7 +43,7 @@ export interface InviteBridgeHandle {
 /** Managed DLC and content of the data root, as a launch reads it. */
 export interface LaunchContent {
   roots(game: Game): Promise<string[]>;
-  relatedProducts?(game: Game, offline?: boolean): Promise<string[]>;
+  relatedProducts?(game: Game, offline?: boolean, owned?: Record<string, LibraryAccess>): Promise<string[]>;
 }
 
 /**
@@ -61,6 +61,11 @@ export interface GameSessionDeps {
   /** Base environment for the game. */
   environment(): NodeJS.ProcessEnv;
   connectivity?: { check(): Promise<ConnectivityStatus> };
+  /**
+   * Starts loading the account's owned products for DLC hints; the returned
+   * function waits a bounded time for them. Not called offline.
+   */
+  ownedAccess?(): () => Promise<Record<string, LibraryAccess> | undefined>;
   account(): { stored: boolean | null; username?: string };
   /** Game Mode wallet readiness. */
   ensureWallet(): Promise<void>;
@@ -160,6 +165,9 @@ export class GameSession {
     // its cached identity, instead of each waiting for its own connect timeout.
     const reachability: ConnectivityStatus = deps.connectivity ? await deps.connectivity.check() : { state: 'unknown' };
     const offlineLaunch = reachability.state === 'offline';
+    // Owned bundles let DLC discovery find content the package does not list.
+    // Load them while the launch prepares; offline there is nothing to fetch.
+    const ownedAccess = offlineLaunch ? undefined : deps.ownedAccess?.();
     const owner = deps.account();
     if (owner.stored === true && owner.username && await bindOfflineAccess(dataRoot, owner.username)) deps.onOfflineRevoked?.('account-changed');
     const offlineRuntime = await offlineIdentityRuntime(wine);
@@ -250,7 +258,8 @@ export class GameSession {
       environment.XODUS_NEXUS_LAUNCH_ID = operationId;
       const content = deps.content(dataRoot);
       if (content.relatedProducts && await storeDiscoveryRuntime(wine)) {
-        const related = await content.relatedProducts(game, offlineLaunch).catch(() => {
+        const owned = ownedAccess ? await ownedAccess() : undefined;
+        const related = await content.relatedProducts(game, offlineLaunch, owned).catch(() => {
           addGameLog('Additional DLC discovery unavailable. Continuing with package-declared content.');
           return [] as string[];
         });
