@@ -1122,7 +1122,7 @@ const gameSession = new GameSession({
   licenseCache: () => offlineLicenseCache(),
   content: () => ({
     roots: (game) => contentManager().roots(game),
-    relatedProducts: (game) => contentManager().relatedProducts(game, accountLibrary.peekAccess(), currentMarket()),
+    relatedProducts: (game, offline) => contentManager().relatedProducts(game, accountLibrary.peekAccess(), currentMarket(), undefined, offline),
   }),
   inviteBridge: async (operationId, game, titleId, log) => {
     const account=authState.username,epoch=xboxSocial.epoch;

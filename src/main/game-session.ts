@@ -43,7 +43,7 @@ export interface InviteBridgeHandle {
 /** Managed DLC and content of the data root, as a launch reads it. */
 export interface LaunchContent {
   roots(game: Game): Promise<string[]>;
-  relatedProducts?(game: Game): Promise<string[]>;
+  relatedProducts?(game: Game, offline?: boolean): Promise<string[]>;
 }
 
 /**
@@ -250,7 +250,7 @@ export class GameSession {
       environment.XODUS_NEXUS_LAUNCH_ID = operationId;
       const content = deps.content(dataRoot);
       if (content.relatedProducts && await storeDiscoveryRuntime(wine)) {
-        const related = await content.relatedProducts(game).catch(() => {
+        const related = await content.relatedProducts(game, offlineLaunch).catch(() => {
           addGameLog('Additional DLC discovery unavailable. Continuing with package-declared content.');
           return [] as string[];
         });

@@ -139,7 +139,7 @@ export class GameController {
       // the launcher's, as it is before its Library page has loaded.
       content: (dataRoot) => {
         const content = new GameContent(dataRoot);
-        return { roots: (game) => content.roots(game), relatedProducts: (game) => content.relatedProducts(game, {}, daemonMarket(this.store.settings.market, { ...process.env, ...this.clientEnvironment })) };
+        return { roots: (game) => content.roots(game), relatedProducts: (game, offline) => content.relatedProducts(game, {}, daemonMarket(this.store.settings.market, { ...process.env, ...this.clientEnvironment }), undefined, offline) };
       },
       inviteBridge: (operationId, game, titleId, log) => this.startInvites(operationId, game.title, titleId, log),
       onChange: () => this.publish(),
