@@ -1,4 +1,5 @@
 import { createWriteStream } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { ConnectivityStatus, Game, GameOperation } from '../shared/types.js';
 import type { DaemonErrorCode, DaemonState, InviteAction } from '../shared/daemon-protocol.js';
@@ -22,6 +23,8 @@ import { AccountLibrary } from '../main/account-library.js';
 import { ContentService } from '../main/content-service.js';
 import { XboxTitlePresence } from '../main/xbox-title-presence.js';
 import { closeGracefully, keepSteamFocus, type Closable } from '../main/graceful-close.js';
+import { protonRootOf } from '../main/proton-layout.js';
+import { registerNexusTool } from '../main/steam-tool.js';
 import { AdoptedGame, adoptService, SessionStateFile, type SessionRecord } from './recovery.js';
 
 export class DaemonError extends Error {
@@ -172,6 +175,12 @@ export class GameController {
     await this.backend.refresh();
     this.lastBackendRefresh = Date.now();
     await this.runtime.refresh();
+    // Keep the "Xodus Nexus" entry in Steam's Compatibility dropdown on the current runtime.
+    if (this.runtime.current.winePath) {
+      await registerNexusTool(os.homedir(), protonRootOf(this.runtime.current.winePath))
+        .then(({ changed }) => { if (changed.length) this.options.log(`Registered the Xodus Nexus compatibility tool in ${changed.join(', ')}; Steam lists it after a restart.`); })
+        .catch(error => this.options.log(`Could not register the Xodus Nexus compatibility tool: ${(error as Error).message}`));
+    }
     this.connectivity.start();
     await this.recover();
     this.maintenance = setInterval(() => void this.maintain(), 60_000);
