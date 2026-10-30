@@ -1022,6 +1022,14 @@ const gameSession = new GameSession({
     return {port:bridge.port,key:bridge.key,stop:async()=>{try{await bridge.stop();}finally{gameInviteBridges.delete(operationId);}}};
   },
   onInviteAvailability: (reason) => { gameInviteUnavailableReason = reason; },
+  windowIdentity: async (game, coverDataUrl) => {
+    if (process.platform !== 'linux' || !shortcuts?.available) return undefined;
+    const png = await loadShortcutIcon({ coverDataUrl }, bytes => {
+      const image = nativeImage.createFromBuffer(bytes);
+      return image.isEmpty() ? undefined : image.resize({ width: 256, height: 256 }).toPNG();
+    });
+    return shortcuts.windowIdentity(game, png);
+  },
   attachGame: (game, pid) => { gameGuide?.bind(game.id, game.title, pid); return () => gameGuide?.unbind(game.id); },
   onOfflineRevoked: (reason) => emitLog('offline', `Removed stored offline licenses and identities (${reason}).`),
   onChange: (operation, operationId, immediate) => {

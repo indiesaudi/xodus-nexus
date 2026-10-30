@@ -87,6 +87,8 @@ export interface GameSessionDeps {
   inviteBridge?(operationId: string, game: Game, titleId: string, log: (line: string) => void): Promise<InviteBridgeHandle>;
   /** Why invitations are unavailable for this launch, or undefined once they may work. */
   onInviteAvailability?(reason: string | undefined): void;
+  /** The desktop identity (WINE_APPLICATION_ID) that gives the game's windows its installed artwork; absent where there is none. */
+  windowIdentity?(game: Game, coverDataUrl: string | undefined): Promise<string | undefined>;
   /** The game process started; returns the matching detach for its exit. */
   attachGame?(game: Game, pid: number | undefined): () => void;
   /** `operation` is the live object (mutated in place) or undefined once a failed preparation is cleared. */
@@ -298,6 +300,12 @@ export class GameSession {
         const caches = steamShaderCacheEnvironment(environment, await prepareShaderCache(cacheRoot), shaderCacheLimits(store.settings.shaderCacheLimitGiB));
         Object.assign(environment, caches);
         if (!caches.VKD3D_SHADER_CACHE_PATH || !caches.MESA_SHADER_CACHE_DIR || !caches.__GL_SHADER_DISK_CACHE_PATH) addGameLog('Keeping the shader cache paths Steam or the player already set.');
+      }
+      if (deps.windowIdentity) {
+        try {
+          const identity = await deps.windowIdentity({ ...game, installState: inspected.installState }, inspected.coverDataUrl ?? game.coverDataUrl);
+          if (identity) environment.WINE_APPLICATION_ID = identity;
+        } catch { addGameLog('Game window icon unavailable.'); }
       }
       // Never inherit another title's discovery list. Hints are scoped public
       // metadata, not licenses, and cannot make an optional lookup block Play.
