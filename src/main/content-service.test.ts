@@ -23,7 +23,7 @@ describe('ContentService', () => {
     expect(a).toEqual(['9P1J8S7CCWWT', '9WZDNCRFJ3TJ']);
     expect(b).toBe(a);
     expect(discover).toHaveBeenCalledTimes(1);
-    expect(discover).toHaveBeenCalledWith(game, { '9P1J8S7CCWWT': 'owned' }, 'US');
+    expect(discover).toHaveBeenCalledWith(game, { '9P1J8S7CCWWT': 'owned' }, 'US', expect.any(AbortSignal));
     expect(service.cached(game, 'US')).toEqual(a);
     expect(service.cached(other, 'US')).toEqual([]);
     expect(service.cached(game, 'GB')).toEqual([]);

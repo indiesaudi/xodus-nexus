@@ -2,6 +2,8 @@ import type { AccountLibraryPage, Game } from '../shared/types.js';
 
 type Access = AccountLibraryPage['accessByProductId'];
 const TTL = 5 * 60_000;
+// Nothing waits on this but the game's query, which gives up after 20 s.
+const DISCOVERY_MS = 15_000;
 const market = (value: string) => /^[A-Z]{2}$/.test(value.toUpperCase()) ? value.toUpperCase() : 'US';
 
 /** The account library as discovery reads it (`AccountLibrary`). */
@@ -13,7 +15,7 @@ export interface ContentLibrary {
 
 /** Catalog discovery for one game (`GameContent.relatedProducts`). */
 export interface ContentDiscovery {
-  relatedProducts(game: Game, access: Access, market: string): Promise<string[]>;
+  relatedProducts(game: Game, access: Access, market: string, signal: AbortSignal): Promise<string[]>;
 }
 
 /** What the game bridge answers right now: still discovering, the IDs, or nothing new. */
@@ -60,7 +62,7 @@ export class ContentService {
     const generation = this.generation;
     const job = (async () => {
       const owned = await this.library.access().then(value => value.accessByProductId, () => this.library.peekAccess());
-      const ids = await this.discovery().relatedProducts(game, owned, market(selectedMarket));
+      const ids = await this.discovery().relatedProducts(game, owned, market(selectedMarket), AbortSignal.timeout(DISCOVERY_MS));
       if (generation === this.generation) { this.results.set(key, { ids, until: this.now() + TTL }); this.failed.delete(key); }
       return ids;
     })();
