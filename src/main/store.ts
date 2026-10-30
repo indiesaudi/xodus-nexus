@@ -32,6 +32,7 @@ const defaultSettings: Settings = {
   verboseLogs: false,
   ...defaultXboxOverlay,
   backgroundDaemon: false,
+  uiScale: 0,
 };
 
 export class StateStore {
