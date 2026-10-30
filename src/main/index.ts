@@ -59,6 +59,7 @@ import { profileIdOf } from '../shared/profile-id.js';
 import { InstallQueue, assertActivityCompatible, assertInstallDestination, canonicalInstallPath, installPathsOverlap } from './install-queue.js';
 import { GameDisplayBlocker } from './game-display.js';
 import { launchErrorPage } from './launch-error-page.js';
+import { runUnder, steamTrackingRerun } from './steam-tracking.js';
 import { GameShortcuts, launchErrorMessage, shortcutArguments, shortcutInstanceData, shortcutInstanceRequest, shortcutLauncherPath, type ShortcutDestination, type ShortcutRequest } from './game-shortcuts.js';
 import { ShortcutLaunch } from './shortcut-launch.js';
 import { loadShortcutIcon } from './shortcut-icon.js';
@@ -270,9 +271,14 @@ if (process.platform === 'linux') {
     if (fonts) app.once('will-quit', () => fonts.dispose());
   } catch (error) { console.warn('Launcher fallback font unavailable:', (error as Error).message); }
 }
+// Steam's Exit reaches only a launch inside its tracking: start the shortcut again there and wait.
+const steamRerun = launchError === undefined && startupRequest.gameId && !startupError
+  ? steamTrackingRerun(startupRequest.steamCommand, process.env, path.join(app.getPath('userData'), 'shortcuts', 'launch-game'), startupRequest.gameId)
+  : undefined;
+if (steamRerun) runUnder(steamRerun.words, steamRerun.env).then(code => app.exit(code), () => app.exit(1));
 // Electron's lock is scoped to userData, so independent profiles stay isolated.
-const primaryInstance = launchError === undefined && (demoMode || app.requestSingleInstanceLock(shortcutInstanceData(startupRequest, Boolean(startupError))));
-if (!primaryInstance && launchError === undefined) app.quit();
+const primaryInstance = launchError === undefined && !steamRerun && (demoMode || app.requestSingleInstanceLock(shortcutInstanceData(startupRequest, Boolean(startupError))));
+if (!primaryInstance && launchError === undefined && !steamRerun) app.quit();
 else if (!demoMode) app.on('second-instance', (_event, _argv, _workingDirectory, additionalData) => {
   try { receiveLaunchRequest({ ...shortcutInstanceRequest(additionalData, app.getPath('userData')), handedOff: true }); }
   catch (error) {
@@ -1162,6 +1168,14 @@ const gameSession = new GameSession({
     return {port:bridge.port,key:bridge.key,stop:async()=>{try{await bridge.stop();}finally{gameInviteBridges.delete(operationId);}}};
   },
   onInviteAvailability: (reason) => { gameInviteUnavailableReason = reason; },
+  windowIdentity: async (game, coverDataUrl) => {
+    if (process.platform !== 'linux' || !shortcuts?.available) return undefined;
+    const png = await loadShortcutIcon({ coverDataUrl }, bytes => {
+      const image = nativeImage.createFromBuffer(bytes);
+      return image.isEmpty() ? undefined : image.resize({ width: 256, height: 256 }).toPNG();
+    });
+    return shortcuts.windowIdentity(game, png);
+  },
   attachGame: (game, pid) => { gameGuide?.bind(game.id, game.title, pid); return () => gameGuide?.unbind(game.id); },
   onOfflineRevoked: (reason) => emitLog('offline', `Removed stored offline licenses and identities (${reason}).`),
   onChange: (operation, operationId, immediate) => {

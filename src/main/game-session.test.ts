@@ -169,6 +169,20 @@ describe('GameSession', () => {
     await active.finished;
   });
 
+  it('gives the game windows their desktop identity, and launches without one when it fails', async () => {
+    const windowIdentity = vi.fn(async () => 'xodus-nexus-game-profile-g');
+    const active = await new GameSession(deps({ windowIdentity })).launch('g');
+    expect(h.spawnCalls[0].env.WINE_APPLICATION_ID).toBe('xodus-nexus-game-profile-g');
+    expect(windowIdentity).toHaveBeenCalledWith(expect.objectContaining({ id: 'g', installState: 'ready' }), undefined);
+    h.finish!({ code: 0, output: '' });
+    await active.finished;
+    const failed = await new GameSession(deps({ windowIdentity: async () => { throw Error('no launcher entry'); } })).launch('g');
+    expect(h.spawnCalls[1].env.WINE_APPLICATION_ID).toBeUndefined();
+    expect(failed.operation.log).toContain('Game window icon unavailable.');
+    h.finish!({ code: 0, output: '' });
+    await failed.finished;
+  });
+
   it('refuses a Steam-selected Proton handed to an already running launcher', async () => {
     const steamCommand = ['/steam/reaper', 'SteamLaunch', 'AppId=1', '--', '/steam/GE-Proton/proton', 'waitforexitandrun', '/bin/sh'];
     await expect(new GameSession(deps()).launch('g', { steamCommand, handedOff: true })).rejects.toThrow('Close Xodus Nexus, then start the game from Steam again');

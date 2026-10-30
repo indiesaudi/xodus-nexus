@@ -152,6 +152,9 @@ but have not been verified and may encounter compatibility issues.
 
 | Game | Playable | Status |
 | --- | --- | --- |
+| Forza Motorsport | Partial | Unreleased runtime: intro completed. Online play unverified. |
+| Age of Empires II: Definitive Edition | Yes | Unreleased runtime: single-player gameplay works. Online play unverified. |
+| Age of Empires: Definitive Edition | Partial | Unreleased runtime: menu and sign-in work; Multiplayer and LAN menus enabled. Gameplay unverified. |
 | Age of Empires IV | Startup verified | Unreleased runtime: starts successfully; online play unverified. |
 | Gears of War: E-Day | Yes | Playable online; Xbox playing status works. |
 | Deep Rock Galactic | Yes | Playable online. |
