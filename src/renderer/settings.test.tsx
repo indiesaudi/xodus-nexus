@@ -4,6 +4,15 @@ import { demoSnapshot } from '../shared/demo-data';
 import { SettingsPage } from './App';
 
 describe('Settings diagnostics', () => {
+  it('offers an interface scale for small screens outside the diagnostics disclosure', () => {
+    const data = demoSnapshot();
+    data.settings.uiScale = 1.5;
+    const html = renderToStaticMarkup(<SettingsPage data={data} toast={() => {}} />);
+    const main = html.replace(html.match(/<details\b[^>]*>[\s\S]*?<\/details>/)![0], '');
+    expect(main).toContain('aria-label="Interface scale"');
+    expect(main).toContain('<option value="1.5" selected="">150%</option>');
+    expect(main).toContain('Automatic');
+  });
   it('explains that explicit sign-out also removes the local device registration', () => {
     const html = renderToStaticMarkup(<SettingsPage data={demoSnapshot()} toast={() => {}} />);
     expect(html).toContain('title="Remove saved sign-in credentials and local device registration. Games and saves are kept."');

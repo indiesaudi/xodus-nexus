@@ -25,6 +25,7 @@ const defaultSettings: Settings = {
   runtimeRoot: path.join(defaultDataRoot, 'runtimes'),
   verboseLogs: false,
   backgroundDaemon: false,
+  uiScale: 0,
 };
 
 export class StateStore {
