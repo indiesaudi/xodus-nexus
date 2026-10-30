@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Start offline launches about 3 seconds sooner on devices with a VPN or container network (such as Tailscale): only Wi-Fi, Ethernet and other real network links count as being connected. Thanks @indiesaudi.
+
 - Add native arm64 launcher and backend builds, with architecture-aware downloads and updates. Thanks @indiesaudi.
 
 - Overlap local data verification and staged writes during game updates without changing checkpoint recovery.
