@@ -10,6 +10,7 @@ import { launchErrorArgument, shortcutArguments } from '../main/game-shortcuts.j
 import { DaemonConnection, daemonSocketPath } from '../main/daemon-client.js';
 import { unitNames } from '../main/daemon-units.js';
 import { bundledCloseHelper, keepSteamFocus } from '../main/graceful-close.js';
+import { parseSteamCommand, wrapperPrefix } from '../main/steam-compat.js';
 
 const CONNECT_WINDOW_MS = 10_000;
 const REATTACH_WINDOW_MS = 60_000;
@@ -88,11 +89,70 @@ async function connect(socketPath: string, profileId: string, runtimeDir: string
   return undefined;
 }
 
+const TRACKED = 'XODUS_NEXUS_STEAM_TRACKED';
+
+/** Every live descendant of `root`, deepest first, from /proc. */
+export async function descendants(root: number, proc = '/proc'): Promise<number[]> {
+  const parents = new Map<number, number[]>();
+  for (const name of await fs.readdir(proc).catch(() => [] as string[])) {
+    if (!/^\d+$/.test(name)) continue;
+    const stat = await fs.readFile(path.join(proc, name, 'stat'), 'utf8').catch(() => '');
+    // The parent pid is the second field after the parenthesized command name.
+    const ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1]);
+    if (Number.isInteger(ppid)) parents.set(ppid, [...(parents.get(ppid) ?? []), Number(name)]);
+  }
+  const found: number[] = [];
+  const visit = (pid: number) => { for (const child of parents.get(pid) ?? []) { visit(child); found.push(child); } };
+  visit(root);
+  return found;
+}
+
+/**
+ * Runs `words` with this process's stdio and returns its exit code. Steam may
+ * stop only this process (its direct child); the signal goes to the whole
+ * subtree, because wrappers such as pw-audio-namespace do not pass it on.
+ */
+function runUnder(words: string[], env: NodeJS.ProcessEnv): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(words[0], words.slice(1), { stdio: 'inherit', env });
+    const forward = (signal: NodeJS.Signals) => () => {
+      void descendants(child.pid ?? -1).then(pids => {
+        for (const pid of [...pids, child.pid ?? -1]) { try { process.kill(pid, signal); } catch { /* Already gone. */ } }
+      });
+    };
+    const handlers = (['SIGINT', 'SIGTERM', 'SIGHUP'] as const).map(signal => [signal, forward(signal)] as const);
+    for (const [signal, handler] of handlers) process.on(signal, handler);
+    const done = () => { for (const [signal, handler] of handlers) process.off(signal, handler); };
+    child.once('error', error => { done(); reject(error); });
+    child.once('exit', (code, signal) => { done(); resolve(code ?? (signal ? 1 : 0)); });
+  });
+}
+
+/**
+ * Steam starts the shortcut script with `%command%` after the game id, but
+ * runs only the script: its tracking (`reaper SteamLaunch AppId=…`) is in that
+ * command, and Steam's Exit signals the reaper. So the first run starts this
+ * client again inside the wrappers and the tracking, with Steam's original
+ * LD_PRELOAD, and the second run talks to the daemon. Undefined: no re-run.
+ */
+export function steamLaunchPlan(steamCommand: string[] | undefined, env: NodeJS.ProcessEnv, entry: string, gameId: string):
+  { words: string[]; env: NodeJS.ProcessEnv } | undefined {
+  if (env[TRACKED] === '1' || !steamCommand?.length) return undefined;
+  const parts = parseSteamCommand(steamCommand);
+  if (!parts.tracking.length) return undefined;
+  const next: NodeJS.ProcessEnv = { ...env, [TRACKED]: '1' };
+  const preload = env.XODUS_NEXUS_STEAM_LD_PRELOAD ?? env.LD_PRELOAD;
+  if (preload) next.LD_PRELOAD = preload; else delete next.LD_PRELOAD;
+  return { words: [...wrapperPrefix(parts.wrappers), ...parts.tracking, '/bin/sh', entry, gameId, ...parts.tool], env: next };
+}
+
 export async function main(argv = process.argv.slice(2), env = process.env): Promise<number> {
   const request = shortcutArguments(argv);
   if (!request.gameId) throw new Error('A game shortcut ID is required.');
   const gameId = request.gameId;
   const userData = request.profile ?? path.join(env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config'), 'xodus-nexus');
+  const plan = steamLaunchPlan(request.steamCommand, env, path.join(userData, 'shortcuts', 'launch-game'), gameId);
+  if (plan) return runUnder(plan.words, plan.env);
   const profileId = profileIdOf(userData);
   const runtimeDir = env.XDG_RUNTIME_DIR;
   const connection = runtimeDir && path.isAbsolute(runtimeDir) ? await connect(daemonSocketPath(runtimeDir, profileId), profileId, runtimeDir) : undefined;
