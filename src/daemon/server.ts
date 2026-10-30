@@ -9,7 +9,14 @@ interface Client {
   reader: FrameReader;
   kind?: ClientKind;
   subscribed: boolean;
+  /** Log lines skipped while the client was behind; reported once it catches up. */
+  droppedLogs: number;
 }
+
+/** Game output is best effort: past this much unsent data a client gets no more log lines until it drains.
+ *  A noisy game (vkd3d, Fossilize) otherwise piles writes onto a slow client until the socket fails with
+ *  ENOBUFS, and losing the owner's socket closes the game. */
+const LOG_BACKLOG_LIMIT = 256 * 1024;
 
 export interface ServerOptions {
   version: string;
@@ -27,7 +34,7 @@ export class DaemonServer {
   constructor(private readonly controller: GameController, private readonly options: ServerOptions) {
     this.unsubscribe.push(
       controller.onState(state => this.broadcast({ schema: 1, type: 'state', state }, client => client.subscribed || client.id === controller.owner)),
-      controller.onLog((operationId, line) => this.broadcast({ schema: 1, type: 'log', operationId, line: line.slice(0, 4096) }, client => client.subscribed || client.id === controller.owner)),
+      controller.onLog((operationId, line) => this.broadcast({ schema: 1, type: 'log', operationId, line: line.slice(0, 4096) }, client => (client.subscribed || client.id === controller.owner) && this.acceptLog(client, operationId))),
       controller.onExit((operationId, code, status) => this.broadcast({ schema: 1, type: 'exit', operationId, code, status }, client => client.subscribed || client.id === controller.owner)),
     );
   }
@@ -39,7 +46,7 @@ export class DaemonServer {
   }
 
   accept(socket: Socket): void {
-    const client: Client = { id: randomUUID(), socket, reader: new FrameReader(), subscribed: false };
+    const client: Client = { id: randomUUID(), socket, reader: new FrameReader(), subscribed: false, droppedLogs: 0 };
     this.clients.set(client.id, client);
     socket.setNoDelay?.(true);
     socket.on('data', (chunk: Buffer) => {
@@ -74,6 +81,16 @@ export class DaemonServer {
 
   private broadcast(frame: DaemonFrame, accept: (client: Client) => boolean): void {
     for (const client of this.clients.values()) if (client.kind && accept(client)) this.send(client, frame);
+  }
+
+  private acceptLog(client: Client, operationId: string): boolean {
+    if (client.socket.writableLength > LOG_BACKLOG_LIMIT) { client.droppedLogs++; return false; }
+    if (client.droppedLogs > 0) {
+      const dropped = client.droppedLogs;
+      client.droppedLogs = 0;
+      this.send(client, { schema: 1, type: 'log', operationId, line: `(${dropped} log lines skipped while this client was behind)` });
+    }
+    return true;
   }
 
   private reject(client: Client, error: unknown): void {
