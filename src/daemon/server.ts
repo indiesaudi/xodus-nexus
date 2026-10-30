@@ -20,6 +20,12 @@ export interface ServerOptions {
 }
 
 /** Framed connections, the hello handshake, ownership and fan-out of state. */
+/** A failed launch's reason for the thin client: one line, within the protocol's text limit. */
+export function exitMessage(message: string | undefined): { message?: string } {
+  const line = message?.replace(/[\0-\x1f\x7f]+/g, ' ').trim().slice(0, 4000);
+  return line ? { message: line } : {};
+}
+
 export class DaemonServer {
   private readonly clients = new Map<string, Client>();
   private readonly unsubscribe: (() => void)[] = [];
@@ -28,7 +34,7 @@ export class DaemonServer {
     this.unsubscribe.push(
       controller.onState(state => this.broadcast({ schema: 1, type: 'state', state }, client => client.subscribed || client.id === controller.owner)),
       controller.onLog((operationId, line) => this.broadcast({ schema: 1, type: 'log', operationId, line: line.slice(0, 4096) }, client => client.subscribed || client.id === controller.owner)),
-      controller.onExit((operationId, code, status) => this.broadcast({ schema: 1, type: 'exit', operationId, code, status }, client => client.subscribed || client.id === controller.owner)),
+      controller.onExit((operationId, code, status, message) => this.broadcast({ schema: 1, type: 'exit', operationId, code, status, ...exitMessage(message) }, client => client.subscribed || client.id === controller.owner)),
       // Only the launcher has a Friends UI to show invitations in.
       controller.onInviteNotice(notice => this.broadcast({ schema: 1, type: 'invite-notice', ...notice }, client => client.kind === 'electron' && client.subscribed)),
     );
