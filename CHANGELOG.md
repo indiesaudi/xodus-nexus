@@ -5,6 +5,7 @@
 - Add an optional background service (**Settings → Advanced → Background service**, off by default): Steam shortcuts start games through it, Exit game in Steam lets the game finish uploading its cloud saves, a signed-in account service stays ready between launches, and a running game survives the service restarting. Thanks @indiesaudi.
 - Close games like a user when you press Stop, so their cloud saves can finish uploading; a second Stop forces the game to end. Builds without the close helper stop games as before. Thanks @indiesaudi.
 - Suggest DLC owned through a bundle when a game starts from a Steam shortcut or right after the launcher opens: the launch now loads the account's owned products while it prepares (waiting at most 2.5 s, skipped offline) instead of using them only when the Library page had loaded them recently.
+- Add an optional full launch view to the backend (0.2.14: `run --materialize-all --view-dir`, with `--playfab-adapter`), so a game can run under another Wine or Proton without Wine file maps. Existing launches are unchanged. Thanks @indiesaudi.
 - Add native arm64 launcher and backend builds, with architecture-aware downloads and updates. Thanks @indiesaudi.
 
 - Overlap local data verification and staged writes during game updates without changing checkpoint recovery.
