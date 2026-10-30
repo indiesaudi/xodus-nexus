@@ -1,12 +1,11 @@
 import { createWriteStream } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import type { ConnectivityStatus, Game, GameOperation } from '../shared/types.js';
 import type { DaemonErrorCode, DaemonState, InviteAction } from '../shared/daemon-protocol.js';
 import { StateStore } from '../main/store.js';
 import { BackendManager } from '../main/backend.js';
 import { RuntimeManager } from '../main/runtime.js';
-import { ConnectivityMonitor } from '../main/connectivity.js';
+import { ConnectivityMonitor, physicalInterfaceUp } from '../main/connectivity.js';
 import { KeyringSupport, type KeyringActions } from '../main/keyring.js';
 import { startSessionKeyring } from '../main/keyring-session.js';
 import { WalletUnlocker } from '../main/keyring-unlock.js';
@@ -45,8 +44,9 @@ export interface ControllerOptions {
 }
 
 /** A network interface besides loopback is up; Electron's `net.isOnline` equivalent. */
+/** Like the launcher: VPN, container and bridge links alone do not count as online. */
 export function interfaceOnline(): boolean {
-  return Object.values(os.networkInterfaces()).some(entries => entries?.some(entry => !entry.internal));
+  return physicalInterfaceUp();
 }
 
 /**

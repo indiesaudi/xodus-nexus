@@ -8,6 +8,8 @@
 - Add an optional full launch view to the backend (0.2.14: `run --materialize-all --view-dir`, with `--playfab-adapter`), so a game can run under another Wine or Proton without Wine file maps. Existing launches are unchanged. Thanks @indiesaudi.
 - Run a game with the Proton selected for its shortcut in Steam (experimental, x86_64). Nexus adds only the Xbox runtime parts the game needs to Steam's prefix and runs it from a private launch view in `XDG_RUNTIME_DIR` (backend 0.2.14). Package identity, ApplicationData, and local settings and saves from the Nexus prefix are not available there; 32-bit games are refused. Without a tool selected in Steam nothing changes. Game shortcuts now end in `%command%`, and **Add to Steam** upgrades existing ones in place.
 - Fix game shortcuts that closed the launcher about a second after starting, without launching the game.
+- Start offline launches about 3 seconds sooner on devices with a VPN or container network (such as Tailscale): only Wi-Fi, Ethernet and other real network links count as being connected. Thanks @indiesaudi.
+
 - Add native arm64 launcher and backend builds, with architecture-aware downloads and updates. Thanks @indiesaudi.
 
 - Overlap local data verification and staged writes during game updates without changing checkpoint recovery.

@@ -37,7 +37,7 @@ import { assertGameRemovalAvailable, validateGameDeleteTarget } from './game-rem
 import { deleteGameDirectory } from './game-delete.js';
 import type { GameProcess } from './game-process.js';
 import { supportedGameLocale } from './game-locale.js';
-import { ConnectivityMonitor } from './connectivity.js';
+import { ConnectivityMonitor, physicalInterfaceUp } from './connectivity.js';
 import { normalizeLaunchTools } from '../shared/launch-tools.js';
 import { LauncherUpdater } from './launcher-update.js';
 import {XboxChatWindows} from './xbox-chat-windows.js';
@@ -2244,7 +2244,7 @@ app.whenReady().then(async () => {
     // and consulted before a launch so offline play starts without waiting
     // for the backend's and the runtime's own connect timeouts. Each return
     // to online re-checks the offline designation.
-    connectivity = new ConnectivityMonitor({ interfaceOnline: () => net.isOnline(), onChange: () => {
+    connectivity = new ConnectivityMonitor({ interfaceOnline: () => net.isOnline() && physicalInterfaceUp(), onChange: () => {
       scheduleSnapshot();
       if (connectivity?.current.state === 'online') verifyOfflineDesignation();
     } });
