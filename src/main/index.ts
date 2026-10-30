@@ -48,7 +48,7 @@ import { createDiagnosticReport, reportSystemInfo, saveDiagnosticReport, validat
 import { queryGameUpdate } from './game-updates.js';
 import { DownloadProgress, PROGRESS_PREFIX } from './download-progress.js';
 import { DownloadCleanup } from './download-cleanup.js';
-import { GameSession, gameLocales, type ActiveGame } from './game-session.js';
+import { GameSession, gameLocales, type ActiveGame, type LaunchOptions } from './game-session.js';
 import { EphemeralServiceSessions } from './service-sessions.js';
 import { bundledCloseHelper, closeGracefully } from './graceful-close.js';
 import { DaemonUnits } from './daemon-units.js';
@@ -59,7 +59,7 @@ import { profileIdOf } from '../shared/profile-id.js';
 import { InstallQueue, assertActivityCompatible, assertInstallDestination, canonicalInstallPath, installPathsOverlap } from './install-queue.js';
 import { GameDisplayBlocker } from './game-display.js';
 import { launchErrorPage } from './launch-error-page.js';
-import { GameShortcuts, launchErrorMessage, shortcutArguments, shortcutInstanceData, shortcutInstanceRequest, shortcutLauncherPath, type ShortcutDestination } from './game-shortcuts.js';
+import { GameShortcuts, launchErrorMessage, shortcutArguments, shortcutInstanceData, shortcutInstanceRequest, shortcutLauncherPath, type ShortcutDestination, type ShortcutRequest } from './game-shortcuts.js';
 import { ShortcutLaunch } from './shortcut-launch.js';
 import { loadShortcutIcon } from './shortcut-icon.js';
 import { AccountProfile } from './account-profile.js';
@@ -247,9 +247,9 @@ let finalizingGame = false;
 let shortcutOnly = false;
 let launchReady = false;
 let windowOpening: Promise<void> | undefined;
-const pendingRequests: (string | undefined)[] = [];
+const pendingRequests: ShortcutRequest[] = [];
 const pendingShortcutErrors: unknown[] = [];
-let startupRequest: ReturnType<typeof shortcutArguments> = {};
+let startupRequest: ShortcutRequest = {};
 let startupError: Error | undefined;
 try {
   startupRequest = shortcutArguments(process.argv.slice(1));
@@ -273,7 +273,7 @@ if (process.platform === 'linux') {
 const primaryInstance = launchError === undefined && (demoMode || app.requestSingleInstanceLock(shortcutInstanceData(startupRequest, Boolean(startupError))));
 if (!primaryInstance && launchError === undefined) app.quit();
 else if (!demoMode) app.on('second-instance', (_event, _argv, _workingDirectory, additionalData) => {
-  try { receiveLaunchRequest(shortcutInstanceRequest(additionalData, app.getPath('userData')).gameId); }
+  try { receiveLaunchRequest({ ...shortcutInstanceRequest(additionalData, app.getPath('userData')), handedOff: true }); }
   catch (error) {
     if (launchReady) void shortcutError(error);
     else pendingShortcutErrors.push(error);
@@ -281,7 +281,7 @@ else if (!demoMode) app.on('second-instance', (_event, _argv, _workingDirectory,
 });
 const shortcutLaunch = new ShortcutLaunch(
   () => { const active = visibleGameOperation(); return active?.kind === 'launch' && ['preparing', 'running', 'stopping'].includes(active.status) ? active.gameId : undefined; },
-  (id) => launchGame(id),
+  (id, options) => launchGame(id, options),
 );
 
 async function showLauncher(): Promise<void> {
@@ -302,10 +302,10 @@ function finishShortcutSession(): void {
   // Account service and game-process cleanup must finish before normal quit.
   if (launchReady && (shortcutOnly || !mainWindow || mainWindow.isDestroyed()) && !nativeSocialKeepAlive.some(active=>active()) && !shortcutLaunch.preparing && !preparingLaunch && !finalizingGame && downloadCancellations.size === 0 && installQueue.size === 0 && operations.size === 0 && serviceSessions.size === 0) app.quit();
 }
-function receiveLaunchRequest(id?: string): void {
-  if (!launchReady) { pendingRequests.push(id); return; }
-  if (!id) { void showLauncher(); return; }
-  void shortcutLaunch.request(id).catch(shortcutError).finally(finishShortcutSession);
+function receiveLaunchRequest(request: ShortcutRequest): void {
+  if (!launchReady) { pendingRequests.push(request); return; }
+  if (!request.gameId) { void showLauncher(); return; }
+  void shortcutLaunch.request(request.gameId, { steamCommand: request.steamCommand, handedOff: request.handedOff }).catch(shortcutError).finally(finishShortcutSession);
 }
 
 function daemonStatus(): AppSnapshot['daemon'] {
@@ -1146,11 +1146,11 @@ const gameSession = new GameSession({
   },
 });
 
-async function launchGame(id: string): Promise<void> {
+async function launchGame(id: string, options: LaunchOptions = {}): Promise<void> {
   ensureIdle('launch');
   preparingLaunch = true;
   let active: ActiveGame;
-  try { active = await gameSession.launch(id); }
+  try { active = await gameSession.launch(id, options); }
   finally { preparingLaunch = false; }
   operations.set(active.operationId, active.process.child);
   gameProcesses.set(active.operationId, active.process);
@@ -2305,17 +2305,22 @@ app.whenReady().then(async () => {
    await overlayShortcut.configure(store.settings);
   }
   // No external toggle socket or compositor scripts are installed automatically.
-  launchReady = true;
   if (startupRequest.gameId) {
     await prepareSystemWallet();
     await refreshAccount(false);
-    receiveLaunchRequest(startupRequest.gameId);
-  } else await showBeforeAccountCheck(showLauncher, refreshInitialAccount, () => {
-    if (shutdownStarted || authState.running || authState.lastResult === 'success') return;
-    authState = { ...authState, note: 'Account status is unavailable. Check the system keyring in Settings, then refresh.' };
-    emitSnapshot();
-  });
-  for (const id of pendingRequests.splice(0)) receiveLaunchRequest(id);
+    // Only now: the account refresh resets the party, whose idle event would
+    // otherwise end a shortcut session before its launch is registered.
+    launchReady = true;
+    receiveLaunchRequest(startupRequest);
+  } else {
+    launchReady = true;
+    await showBeforeAccountCheck(showLauncher, refreshInitialAccount, () => {
+      if (shutdownStarted || authState.running || authState.lastResult === 'success') return;
+      authState = { ...authState, note: 'Account status is unavailable. Check the system keyring in Settings, then refresh.' };
+      emitSnapshot();
+    });
+  }
+  for (const request of pendingRequests.splice(0)) receiveLaunchRequest(request);
   for (const error of pendingShortcutErrors.splice(0)) void shortcutError(error);
   app.on('activate', () => { void showLauncher(); });
 }).catch((error) => {

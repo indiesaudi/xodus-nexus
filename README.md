@@ -76,6 +76,11 @@ Flatpak version available through Discover. Other browsers are not supported.
 - Game settings offer an optional **DualSense compatibility mode** if a standard DualSense is not detected. It applies only to that game and may disable advanced haptics and adaptive triggers.
 - Choose **Add to Steam** in the game menu, or **Add Nexus to Steam** in Settings, to create a Non-Steam shortcut with available artwork. Steam can stay running, including in Game Mode. Requires native Linux Steam; Flatpak Steam is not yet supported.
 - **Settings → Advanced → Background service** (off by default) runs the Nexus game daemon as a systemd user service (`~/.config/systemd/user`, socket-activated, no root). Steam shortcuts then start through a small client: launches skip the Electron start-up, and Exit game in Steam ends only that client while the daemon closes the game and lets cloud-save sync finish. Without the service, shortcuts start Nexus directly as before. Check it with `journalctl --user -u xodus-nexus-<profile>.service`.
+- **Use the Proton selected in Steam (experimental, x86_64):** pick another Proton in a game shortcut's Compatibility setting in Steam and Nexus runs the game with it, adding only the Xbox runtime parts it needs. Leave the setting empty to use the Nexus runtime as before. Limitations:
+  - Package identity and ApplicationData from the Nexus runtime are not available; games that need them may fail.
+  - The game uses Steam's prefix for that shortcut, so local game settings and local saves from the Nexus prefix are not there (the game may start as on a first run).
+  - The decrypted launch view is kept in `XDG_RUNTIME_DIR`, usually RAM. Nexus refuses the launch when it would not fit, and removes the view when the game ends.
+  - 32-bit games are not supported.
 - Update the launcher, backend and runtime in **Settings**.
 - **Settings → Interface language** selects a bundled translation independently of game language and Store region. Missing translations fall back to English.
 - **Settings → Downloads** sets a combined game download speed limit in MiB/s (0 means unlimited). A supporting Nexus backend is required; saving the limit also applies it to active downloads.
