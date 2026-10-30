@@ -86,7 +86,8 @@ import { addLiveSteamShortcut } from './steam-live.js';
 import { DownloadCompletionNotifications } from './download-notifications.js';
 import { KeyringSupport } from './keyring.js';
 import { XboxSocialSessions } from './xbox-social.js';
-import { GameInviteBridge, combinedInviteState } from './game-invite-bridge.js';
+import { GameInviteBridge, combinedInviteState, relatedProductsVerb } from './game-invite-bridge.js';
+import { ContentService } from './content-service.js';
 import {XboxTitlePresence} from './xbox-title-presence.js';
 import {XboxParty} from './xbox-party.js';
 import {XboxInvites} from './xbox-invites.js';
@@ -744,6 +745,13 @@ function contentManager(): GameContent {
   if (!managedContent || managedContent.root !== root) managedContent = { root, manager: new GameContent(root) };
   return managedContent.manager;
 }
+// Add-ons the game bridge answers when the game asks; shares the Library page's account library.
+const contentService = new ContentService(accountLibrary, () => contentManager());
+function selectedContentService(): ContentService {
+  contentService.select(authState.stored === true ? authState.username : undefined,
+    backend.current.capabilities.library ? backend.current.binaryPath : undefined, currentMarket());
+  return contentService;
+}
 async function gameContent(id: string) {
   const game = store.games.find(entry => entry.id === id);
   if (!game) throw Error('Game not found.');
@@ -1125,12 +1133,18 @@ const gameSession = new GameSession({
   content: () => ({
     roots: (game) => contentManager().roots(game),
     relatedProducts: (game, offline, owned) => contentManager().relatedProducts(game, owned ?? accountLibrary.peekAccess(), currentMarket(), undefined, offline),
+    cachedRelated: (game) => selectedContentService().cached(game, currentMarket()),
   }),
   ownedAccess: () => { const wait = accountLibrary.startLaunchAccess(); return () => wait(OWNED_ACCESS_WAIT_MS); },
-  inviteBridge: async (operationId, game, titleId, log) => {
+  inviteBridge: async (operationId, game, titleId, log, storeId) => {
     const account=authState.username,epoch=xboxSocial.epoch;
     const current=()=>!shutdownStarted&&authState.stored===true&&authState.username===account&&xboxSocial.epoch===epoch;
-    const bridge=new GameInviteBridge(operationId,game.title,titleId,current,emitSnapshot,()=>{void showFriends().catch(()=>{});},Date.now,sender=>notifyGameInvitation(sender,game.title),new XboxTitlePresence(current,log));
+    const bridge=new GameInviteBridge(operationId,game.title,titleId??'',current,emitSnapshot,()=>{void showFriends().catch(()=>{});},Date.now,sender=>notifyGameInvitation(sender,game.title),titleId?new XboxTitlePresence(current,log):undefined);
+    if(storeId){
+      bridge.verb('related',relatedProductsVerb(storeId,()=>selectedContentService().poll(game,currentMarket()),log));
+      // Start now, so the game's first query usually finds the answer ready.
+      selectedContentService().warm(game,currentMarket());
+    }
     try{await bridge.start();}
     catch(error){await bridge.stop().catch(()=>{});throw error;}
     gameInviteBridges.set(operationId,bridge);
