@@ -62,8 +62,10 @@ async function writeIfChanged(file: string, content: string, mode: number): Prom
 export async function nexusToolFiles(runtimeRoot: string): Promise<Record<string, { content: string; mode: number }>> {
   if (!path.isAbsolute(runtimeRoot) || /[\0\r\n]/.test(runtimeRoot)) throw new Error('Invalid Nexus runtime path.');
   await fs.access(path.join(runtimeRoot, 'proton'), constants.X_OK);
-  // Steam reads the tool's needs (its Steam Linux Runtime) from this manifest.
-  const manifest = await fs.readFile(path.join(runtimeRoot, 'toolmanifest.vdf'), 'utf8').catch(() => DEFAULT_MANIFEST);
+  // Steam reads the tool's needs from this manifest. Without the Steam Linux Runtime: Nexus starts its
+  // games on the host anyway, and the launcher AppImage cannot start inside that container (no libz).
+  const manifest = (await fs.readFile(path.join(runtimeRoot, 'toolmanifest.vdf'), 'utf8').catch(() => DEFAULT_MANIFEST))
+    .replace(/^[ \t]*"require_tool_appid"[^\n]*\n/m, '');
   return {
     'compatibilitytool.vdf': { mode: 0o644, content: [
       '"compatibilitytools"', '{', '  "compat_tools"', '  {', `    "${NEXUS_TOOL_NAME}"`, '    {',

@@ -55,7 +55,7 @@ describe.skipIf(!linux)('Xodus Nexus compatibility tool', () => {
     expect(await registerNexusTool(home, root)).toEqual({ changed: [steam], created: [steam] });
     const tool = path.join(steam, 'compatibilitytools.d', NEXUS_TOOL_NAME);
     expect(await fs.readFile(path.join(tool, 'compatibilitytool.vdf'), 'utf8')).toContain('"display_name" "Xodus Nexus"');
-    expect(await fs.readFile(path.join(tool, 'toolmanifest.vdf'), 'utf8')).toBe(manifest);
+    expect(await fs.readFile(path.join(tool, 'toolmanifest.vdf'), 'utf8')).toBe(manifest.replace('  "require_tool_appid" "4185400"\n', ''));
     expect(await fs.readFile(path.join(tool, 'proton'), 'utf8')).toBe(`#!/bin/sh\n# Xodus Nexus compatibility tool: the current Nexus runtime.\nexec '${root}/proton' "$@"\n`);
     expect((await fs.stat(path.join(tool, 'proton'))).mode & 0o777).toBe(0o755);
     expect(await isNexusTool(tool)).toBe(true);
